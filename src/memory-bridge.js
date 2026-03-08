@@ -8,7 +8,7 @@ const path = require('path');
 
 class MemoryBridge {
   constructor(options = {}) {
-    this.memoryBasePath = options.memoryBasePath || '/home/node/.openclaw/workspace/memory';
+    this.memoryBasePath = options.memoryBasePath || '/f/ai-workspace/projects/openclaw-memory-system-v1/.memory-system';
   }
 
   async getRecentSessions(hours = 24) {
