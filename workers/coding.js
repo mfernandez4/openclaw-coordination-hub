@@ -143,7 +143,7 @@ class CodingWorker extends BaseWorker {
 
 // Run the worker if executed directly
 if (require.main === module) {
-  const worker = new CodingWorker('coding-worker');
+  const worker = new CodingWorker('coding');
   
   process.on('SIGTERM', async () => {
     await worker.stop();
