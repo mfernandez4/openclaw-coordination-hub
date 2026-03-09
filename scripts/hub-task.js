@@ -29,11 +29,18 @@ async function enqueueTask(task, agent = 'default', priority = 0) {
     status: 'pending'
   };
 
-  // Higher priority = LPUSH (front), lower = RPUSH (back)
-  if (priority > 0) {
-    await redis.lpush(QUEUE_NAME, JSON.stringify(taskObj));
+  // If agent specified, put in agent inbox, otherwise use general queue
+  if (agent && agent !== 'default') {
+    const inboxKey = `a2a:inbox:${agent}`;
+    await redis.rpush(inboxKey, JSON.stringify(taskObj));
+    console.log(`Enqueued to ${inboxKey}: ${taskObj.id}`);
   } else {
-    await redis.rpush(QUEUE_NAME, JSON.stringify(taskObj));
+    // Higher priority = LPUSH (front), lower = RPUSH (back)
+    if (priority > 0) {
+      await redis.lpush(QUEUE_NAME, JSON.stringify(taskObj));
+    } else {
+      await redis.rpush(QUEUE_NAME, JSON.stringify(taskObj));
+    }
   }
 
   await redis.quit();
