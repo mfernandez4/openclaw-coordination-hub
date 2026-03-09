@@ -1,0 +1,20 @@
+{
+  "filters": [
+    {
+      "agent": "*",
+      "maxDurationMs": 120000
+    }
+  ],
+  "formatters": {
+    "default": "markdown",
+    "slack": "compact",
+    "json": "raw"
+  },
+  "defaultFormatter": "markdown",
+  "policies": {
+    "maxDurationMs": null,
+    "requireApproval": [],
+    "blockAgents": [],
+    "auditLog": true
+  }
+}
