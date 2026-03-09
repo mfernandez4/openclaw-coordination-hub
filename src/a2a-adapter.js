@@ -3,6 +3,12 @@
  * 
  * Provides modality-agnostic agent communication
  * following the A2A specification patterns.
+ * 
+ * Features:
+ * - Broadcast to all agents (a2a:agents)
+ * - Directed handoffs (to specific agent via inbox)
+ * - Coordination channel for peer negotiation
+ * - Agent registry for discovery
  */
 const { RedisPubSub } = require('./redis-pubsub');
 
@@ -10,26 +16,93 @@ class A2AAdapter {
   constructor(options = {}) {
     this.pubsub = options.pubsub || null;
     this.agentId = options.agentId || 'hub';
-    this.messageTypes = ['task', 'result', 'error', 'heartbeat'];
+    this.messageTypes = ['task', 'result', 'error', 'heartbeat', 'handoff', 'negotiate', 'ack'];
+    this.inboxQueue = `a2a:inbox:${this.agentId}`;
+    this.registry = new Map(); // agentId -> { status, capabilities, lastSeen }
   }
 
   async initialize(pubsub) {
     this.pubsub = pubsub;
-    // Subscribe to agent communication channel
-    await this.pubsub.subscribe('a2a:agents', this.handleMessage.bind(this));
+    
+    // Subscribe to broadcast channel (all agents)
+    await this.pubsub.subscribe('a2a:agents', this.handleBroadcast.bind(this));
+    
+    // Subscribe to coordination channel (peer negotiation)
+    await this.pubsub.subscribe('a2a:coordination', this.handleCoordination.bind(this));
+    
+    // Subscribe to own inbox for directed messages
+    await this.pubsub.subscribe(this.inboxQueue, this.handleInbox.bind(this));
+    
+    // Register self
+    this.registerAgent(this.agentId, { capabilities: this.getCapabilities() });
+    
+    console.log(`[A2A] ${this.agentId} initialized`);
+    console.log(`[A2A] Inbox: ${this.inboxQueue}`);
+    console.log(`[A2A] Broadcast: a2a:agents`);
+    console.log(`[A2A] Coordination: a2a:coordination`);
+  }
+
+  // ========== Agent Registry ==========
+  
+  registerAgent(agentId, metadata = {}) {
+    this.registry.set(agentId, {
+      ...metadata,
+      status: 'online',
+      lastSeen: Date.now()
+    });
+    console.log(`[A2A] Registered: ${agentId}`);
+  }
+
+  getAgent(agentId) {
+    return this.registry.get(agentId);
+  }
+
+  getAllAgents() {
+    return Array.from(this.registry.entries()).map(([id, data]) => ({ id, ...data }));
+  }
+
+  getOnlineAgents() {
+    const now = Date.now();
+    return this.getAllAgents().filter(a => now - a.lastSeen < 60000); // 60s timeout
+  }
+
+  // ========== Message Handling ==========
+
+  handleBroadcast(message) {
+    // Handle messages sent to broadcast channel
+    // If 'to' is specified and it's not us, ignore
+    if (message.to && message.to !== this.agentId && message.to !== '*') {
+      return; // Not for us
+    }
+    this.handleMessage(message);
+  }
+
+  handleInbox(message) {
+    // Handle directed messages to our inbox
+    if (message.to === this.agentId) {
+      console.log(`[A2A] Direct message from ${message.from}:`, message.type);
+      this.handleMessage(message);
+    }
+  }
+
+  handleCoordination(message) {
+    // Handle peer negotiation messages
+    console.log(`[A2A] Coordination from ${message.from}:`, message.type);
+    this.handleNegotiation(message);
   }
 
   handleMessage(message) {
     const { type, from, to, payload } = message;
     
     if (!this.messageTypes.includes(type)) {
-      console.warn(`Unknown message type: ${type}`);
+      console.warn(`[A2A] Unknown message type: ${type}`);
       return;
     }
 
     // Route message based on type
     switch (type) {
       case 'task':
+      case 'handoff':
         this.handleTask(from, to, payload);
         break;
       case 'result':
@@ -41,34 +114,128 @@ class A2AAdapter {
       case 'heartbeat':
         this.handleHeartbeat(from, payload);
         break;
+      case 'ack':
+        this.handleAck(from, to, payload);
+        break;
+      case 'negotiate':
+        this.handleNegotiation(message);
+        break;
     }
   }
 
-  async send(to, type, payload) {
+  // ========== Send Methods ==========
+
+  /**
+   * Send to specific agent (directed handoff)
+   */
+  async sendTo(agentId, type, payload) {
     const message = {
       type,
       from: this.agentId,
-      to,
+      to: agentId,
       payload,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      id: `msg:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`
     };
-    return this.pubsub.publish('a2a:agents', message);
+    // Publish to target's inbox
+    const inboxChannel = `a2a:inbox:${agentId}`;
+    await this.pubsub.publish(inboxChannel, message);
+    console.log(`[A2A] Directed to ${agentId}:`, type);
+    return message.id;
   }
 
+  /**
+   * Send to all agents (broadcast)
+   */
+  async broadcast(type, payload) {
+    const message = {
+      type,
+      from: this.agentId,
+      to: '*',
+      payload,
+      timestamp: Date.now(),
+      id: `msg:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`
+    };
+    await this.pubsub.publish('a2a:agents', message);
+    console.log(`[A2A] Broadcast:`, type);
+    return message.id;
+  }
+
+  /**
+   * Send to coordination channel (peer negotiation)
+   */
+  async coordinate(type, payload) {
+    const message = {
+      type: 'negotiate',
+      from: this.agentId,
+      to: 'coordination',
+      payload: { ...payload, coordinationType: type },
+      timestamp: Date.now(),
+      id: `msg:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`
+    };
+    await this.pubsub.publish('a2a:coordination', message);
+    console.log(`[A2A] Coordination:`, type);
+    return message.id;
+  }
+
+  /**
+   * Convenience: handoff to another agent
+   */
+  async handoffTo(agentId, taskDescription, context = {}) {
+    return this.sendTo(agentId, 'handoff', {
+      task: taskDescription,
+      context,
+      handedOffBy: this.agentId,
+      priority: context.priority || 0
+    });
+  }
+
+  // ========== Handlers (override in subclass) ==========
+
   handleTask(from, to, payload) {
-    console.log(`Task from ${from}:`, payload);
+    console.log(`[A2A] Task from ${from}:`, payload);
   }
 
   handleResult(from, to, payload) {
-    console.log(`Result from ${from}:`, payload);
+    console.log(`[A2A] Result from ${from}:`, payload);
   }
 
   handleError(from, to, payload) {
-    console.error(`Error from ${from}:`, payload);
+    console.error(`[A2A] Error from ${from}:`, payload);
   }
 
   handleHeartbeat(from, payload) {
-    // Could track agent liveness here
+    // Update registry
+    const agent = this.registry.get(from);
+    if (agent) {
+      agent.status = payload.status || 'online';
+      agent.lastSeen = Date.now();
+    }
+  }
+
+  handleAck(from, to, payload) {
+    console.log(`[A2A] Ack from ${from}:`, payload);
+  }
+
+  handleNegotiation(message) {
+    const { from, payload } = message;
+    console.log(`[A2A] Negotiation from ${from}:`, payload);
+    // Override to implement conflict resolution
+  }
+
+  // ========== Helpers ==========
+
+  getCapabilities() {
+    return [];
+  }
+
+  getStatus() {
+    return {
+      agentId: this.agentId,
+      inbox: this.inboxQueue,
+      onlineAgents: this.getOnlineAgents().length,
+      registeredAgents: this.getAllAgents().length
+    };
   }
 }
 
