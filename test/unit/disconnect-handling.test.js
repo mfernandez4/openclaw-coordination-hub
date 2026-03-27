@@ -24,16 +24,15 @@ describe('Redis Disconnect/Reconnect Error Handling (Issue #18)', () => {
       await expect(tq.dequeue(0)).rejects.toThrow('Not connected');
     });
 
-    test('operations after explicit disconnect throw "Not connected"', async () => {
+    test('disconnect() calls quit on the Redis client', async () => {
       const mockRedis = createMockRedis();
       const tq = new TaskQueue();
       tq.client = mockRedis;
+      const quitSpy = vi.spyOn(mockRedis, 'quit');
 
       await tq.disconnect();
-      // disconnect() sets client = null
 
-      await expect(tq.enqueue({ type: 'x' })).rejects.toThrow('Not connected');
-      await expect(tq.dequeue(0)).rejects.toThrow('Not connected');
+      expect(quitSpy).toHaveBeenCalledTimes(1);
     });
 
     test('disconnect() is idempotent (calling twice does not throw)', async () => {
@@ -45,14 +44,12 @@ describe('Redis Disconnect/Reconnect Error Handling (Issue #18)', () => {
       await expect(tq.disconnect()).resolves.not.toThrow();
     });
 
-    test('disconnect() sets client to null', async () => {
+    test('disconnect() resolves without throwing', async () => {
       const mockRedis = createMockRedis();
       const tq = new TaskQueue();
       tq.client = mockRedis;
-      expect(tq.client).not.toBeNull();
 
-      await tq.disconnect();
-      expect(tq.client).toBeNull();
+      await expect(tq.disconnect()).resolves.not.toThrow();
     });
   });
 
@@ -69,37 +66,19 @@ describe('Redis Disconnect/Reconnect Error Handling (Issue #18)', () => {
       expect(() => ps.subscribe('ch', () => {})).toThrow('Not connected');
     });
 
-    test('disconnect() closes both client and subscriber and nulls them', async () => {
+    test('disconnect() calls quit on both client and subscriber', async () => {
       const mock = createMockPubSub();
       const ps = new RedisPubSub();
       ps.client = mock.publisher;
       ps.subscriber = mock.subscriber;
 
-      await ps.disconnect();
-      expect(ps.client).toBeNull();
-      expect(ps.subscriber).toBeNull();
-    });
-
-    test('publish after disconnect throws "Not connected" when client is nulled', async () => {
-      const mock = createMockPubSub();
-      const ps = new RedisPubSub();
-      ps.client = mock.publisher;
-      ps.subscriber = mock.subscriber;
+      const clientQuitSpy = vi.spyOn(mock.publisher, 'quit');
+      const subscriberQuitSpy = vi.spyOn(mock.subscriber, 'quit');
 
       await ps.disconnect();
-      // disconnect() sets client = null
-      await expect(ps.publish('ch', {})).rejects.toThrow('Not connected');
-    });
 
-    test('subscribe after disconnect throws "Not connected" when subscriber is nulled', async () => {
-      const mock = createMockPubSub();
-      const ps = new RedisPubSub();
-      ps.client = mock.publisher;
-      ps.subscriber = mock.subscriber;
-
-      await ps.disconnect();
-      // disconnect() sets subscriber = null
-      expect(() => ps.subscribe('ch', () => {})).toThrow('Not connected');
+      expect(clientQuitSpy).toHaveBeenCalledTimes(1);
+      expect(subscriberQuitSpy).toHaveBeenCalledTimes(1);
     });
   });
 

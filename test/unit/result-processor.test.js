@@ -216,6 +216,92 @@ describe('ResultProcessor', () => {
     expect(processed.raw.warnings[0]).toContain('5000ms exceeds max 1000ms');
   });
 
+  // ── Start path / subscriber wiring ─────────────────────────────────────────
+
+  test('start() subscribes to coordination channel and processes result messages', async () => {
+    const messageHandlers = {};
+    const mockSubscriber = {
+      subscribe: vi.fn(async () => 1),
+      on: vi.fn((event, handler) => {
+        messageHandlers[event] = handler;
+      }),
+      unsubscribe: vi.fn(async () => 1),
+      quit: vi.fn(async () => {})
+    };
+
+    const mockPublisher = {
+      publish: vi.fn(async () => 1),
+      lpush: vi.fn(async () => 1),
+      ltrim: vi.fn(async () => 'OK'),
+      set: vi.fn(async () => 'OK'),
+      quit: vi.fn(async () => {})
+    };
+
+    const startProcessor = new ResultProcessor();
+    startProcessor.connect = vi.fn(async () => {
+      startProcessor.subscriber = mockSubscriber;
+      startProcessor.publisher = mockPublisher;
+    });
+
+    const processSpy = vi.spyOn(startProcessor, 'processResult');
+
+    await startProcessor.start();
+
+    expect(mockSubscriber.subscribe).toHaveBeenCalledWith('a2a:coordination');
+    expect(messageHandlers.message).toBeTypeOf('function');
+
+    await messageHandlers.message('a2a:coordination', JSON.stringify({
+      type: 'result',
+      taskId: 'start-path-1',
+      agent: 'worker',
+      task: 'build',
+      status: 'completed'
+    }));
+
+    expect(processSpy).toHaveBeenCalledTimes(1);
+
+    await startProcessor.stop();
+  });
+
+  test('start() handler logs parse errors for malformed payloads instead of throwing', async () => {
+    const messageHandlers = {};
+    const mockSubscriber = {
+      subscribe: vi.fn(async () => 1),
+      on: vi.fn((event, handler) => {
+        messageHandlers[event] = handler;
+      }),
+      unsubscribe: vi.fn(async () => 1),
+      quit: vi.fn(async () => {})
+    };
+
+    const mockPublisher = {
+      publish: vi.fn(async () => 1),
+      lpush: vi.fn(async () => 1),
+      ltrim: vi.fn(async () => 'OK'),
+      set: vi.fn(async () => 'OK'),
+      quit: vi.fn(async () => {})
+    };
+
+    const startProcessor = new ResultProcessor();
+    startProcessor.connect = vi.fn(async () => {
+      startProcessor.subscriber = mockSubscriber;
+      startProcessor.publisher = mockPublisher;
+    });
+
+    const parseErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await startProcessor.start();
+
+    await expect(messageHandlers.message('a2a:coordination', '{not-json')).resolves.toBeUndefined();
+    expect(parseErrorSpy).toHaveBeenCalledWith(
+      '[result-processor] Parse error:',
+      expect.stringMatching(/Unexpected token|Expected property name/)
+    );
+
+    parseErrorSpy.mockRestore();
+    await startProcessor.stop();
+  });
+
   // ── Disconnect ─────────────────────────────────────────────────────────────
 
   test('stop() unsubscribes and quits subscriber and publisher without throwing', async () => {

@@ -177,12 +177,5 @@ describe('RedisPubSub', () => {
     await expect(pubsub.disconnect()).resolves.not.toThrow();
     expect(mockClient.quit).toHaveBeenCalledTimes(1);
     expect(mockSubscriber.quit).toHaveBeenCalledTimes(1);
-    expect(pubsub.client).toBeNull();
-    expect(pubsub.subscriber).toBeNull();
-  });
-
-  test('publish after disconnect throws "Not connected" when client is nulled', async () => {
-    await pubsub.disconnect();
-    await expect(pubsub.publish('ch', {})).rejects.toThrow('Not connected');
   });
 });

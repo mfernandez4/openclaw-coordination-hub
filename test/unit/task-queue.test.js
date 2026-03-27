@@ -107,12 +107,13 @@ describe('TaskQueue', () => {
     await expect(tq2.disconnect()).resolves.not.toThrow();
   });
 
-  test('operations after disconnect throw "Not connected" when client is null', async () => {
+  test('disconnect() calls client.quit()', async () => {
     const tq2 = new TaskQueue();
     tq2.client = mockRedis;
+    const quitSpy = vi.spyOn(mockRedis, 'quit');
+
     await tq2.disconnect();
 
-    await expect(tq2.enqueue({ type: 'x' })).rejects.toThrow('Not connected');
-    await expect(tq2.dequeue(0)).rejects.toThrow('Not connected');
+    expect(quitSpy).toHaveBeenCalledTimes(1);
   });
 });

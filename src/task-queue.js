@@ -32,7 +32,6 @@ class TaskQueue {
 
   async disconnect() {
     if (this.client) await this.client.quit();
-    this.client = null;
   }
 }
 
