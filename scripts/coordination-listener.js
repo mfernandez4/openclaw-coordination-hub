@@ -10,7 +10,9 @@
 const Redis = require('ioredis');
 
 const COORDINATION_CHANNEL = 'a2a:coordination';
-const RESULTS_CHANNEL = 'a2a:results';
+// ResultProcessor publishes to a2a:results:{orchestratorId} (default: a2a:results:main)
+// Support override via RESULT_CHANNEL env var for multi-orchestrator setups
+const RESULTS_CHANNEL = process.env.RESULT_CHANNEL || 'a2a:results:main';
 
 console.log('[coordination-listener] Starting...');
 
@@ -19,8 +21,10 @@ const subscriber = new Redis({
   port: process.env.REDIS_PORT || 6379 
 });
 
-subscriber.subscribe(COORDINATION_CHANNEL);
-subscriber.subscribe(RESULTS_CHANNEL);
+// Subscribe to coordination channel (raw worker results before ResultProcessor)
+// and to the results channel (ResultProcessor output)
+await subscriber.subscribe(COORDINATION_CHANNEL);
+await subscriber.subscribe(RESULTS_CHANNEL);
 
 console.log(`[coordination-listener] Listening on ${COORDINATION_CHANNEL} and ${RESULTS_CHANNEL}`);
 
