@@ -41,7 +41,20 @@ Provide real-time communication and coordination for OpenClaw's sub-agent ecosys
 ### 1. Redis Pub/Sub Layer
 - Agent status tracking (online/busy/idle)
 - Real-time event broadcasting
-- Channels: `agents:events`, `tasks:events`, `workflows:events`
+- Channels: `a2a:agents`, `a2a:coordination`, `a2a:results:{id}`, `a2a:heartbeats`
+
+### Channel Reference
+
+| Channel | Type | Purpose |
+|---------|------|---------|
+| `a2a:agents` | Pub/Sub | Broadcast to all agents |
+| `a2a:coordination` | Pub/Sub | Raw worker results (ResultProcessor input) |
+| `a2a:inbox:{agentId}` | List | Per-agent task inbox (dispatcher → worker) |
+| `a2a:results:main` | Pub/Sub | Processed results (ResultProcessor output) |
+| `a2a:heartbeats` | Pub/Sub | Worker heartbeat pub/sub |
+| `a2a:registry` | Hash | Persisted agent registry |
+| `coordination:tasks` | List | Task enqueue queue (dispatcher polls) |
+| `coordination:tasks:dlq` | List | Dead-letter queue for unroutable tasks |
 
 ### 2. Task Queue
 - Structured task management

@@ -27,4 +27,8 @@ networks:
   openclaw-internal:
     name: openclaw-internal
     external: true
-    # If network doesn't exist, create it: docker network create openclaw-internal
+    # NOTE: Before running, create the network:
+    #   docker network create openclaw-internal
+    # If your compose stack uses a different network (e.g. ai-stack_default),
+    # either: (a) change openclaw-internal to match your network name, or
+    # (b) create the openclaw-internal network as above

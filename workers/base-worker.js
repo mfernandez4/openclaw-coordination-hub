@@ -36,14 +36,20 @@ class BaseWorker extends EventEmitter {
 
   /**
    * Register as online in registry
+   * Sets TTL = 3× heartbeat interval so stale agents auto-evict.
    */
   async register() {
-    await this.redis.hset(this.registryKey, this.agentId, JSON.stringify({
+    const ttl = Math.floor((this.heartbeatInterval * 3) / 1000); // seconds
+    const entry = JSON.stringify({
       status: 'online',
       startedAt: new Date().toISOString(),
       capabilities: this.getCapabilities()
-    }));
-    console.log(`[${this.agentId}] Registered as online`);
+    });
+    await this.redis.hset(this.registryKey, this.agentId, entry);
+    await this.redis.expire(this.registryKey, ttl); // expire key if all agents vanish
+    // Also set TTL on the specific field via a separate TTL key
+    await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
+    console.log(`[${this.agentId}] Registered as online (TTL: ${ttl}s)`);
   }
 
   /**
@@ -51,6 +57,7 @@ class BaseWorker extends EventEmitter {
    */
   async deregister() {
     await this.redis.hdel(this.registryKey, this.agentId);
+    await this.redis.del(`${this.registryKey}:${this.agentId}:ttl`);
     console.log(`[${this.agentId}] Deregistered`);
   }
 
