@@ -16,6 +16,7 @@ const { MemoryBridge } = require('./memory-bridge');
 const { Mem0Adapter } = require('./mem0-adapter');
 const { TaskDispatcher } = require('./dispatcher');
 const { ResultProcessor } = require('./result-processor');
+const { HealthServer } = require('./health-server');
 const { logger } = require('./logger');
 
 class CoordinationHub {
@@ -27,6 +28,7 @@ class CoordinationHub {
     this.mem0Adapter = null;
     this.dispatcher = null;
     this.resultProcessor = null;
+    this.healthServer = null;
     this.running = false;
   }
 
@@ -71,12 +73,18 @@ class CoordinationHub {
     await this.a2aAdapter.initialize(this.pubsub);
     logger.info('hub', 'A2A Adapter initialized');
 
+    // Start HTTP health endpoint (port configurable via HEALTH_PORT, default 3001)
+    this.healthServer = new HealthServer({ redis: this.pubsub?.client });
+    this.healthServer.start();
+    logger.info('hub', 'Health server started');
+
     this.running = true;
     logger.info('hub', 'Coordination Hub ready');
   }
 
   async stop() {
     this.running = false;
+    if (this.healthServer) this.healthServer.stop();
     if (this.dispatcher) await this.dispatcher.stop();
     if (this.resultProcessor) await this.resultProcessor.stop();
     if (this.pubsub) await this.pubsub.disconnect();
@@ -85,12 +93,14 @@ class CoordinationHub {
   }
 
   getStatus() {
+    const health = this.healthServer?.getStatus();
     return {
       running: this.running,
       redis: this.pubsub ? 'connected' : 'disconnected',
       taskQueue: this.taskQueue ? 'connected' : 'disconnected',
       dispatcher: this.dispatcher ? 'running' : 'stopped',
       resultProcessor: this.resultProcessor ? 'running' : 'stopped',
+      healthServer: health || 'stopped',
       mem0: this.mem0Adapter?.isEnabled() || false,
       a2a: this.a2aAdapter ? 'ready' : 'not_ready'
     };
