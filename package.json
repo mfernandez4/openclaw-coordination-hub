@@ -5,12 +5,19 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "test": "echo \"No tests yet\" && exit 0"
+    "test": "npx vitest run",
+    "test:watch": "npx vitest",
+    "test:coverage": "npx vitest run --coverage"
   },
   "dependencies": {
     "ioredis": "^5.3.2"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "ioredis-mock": "^8.13.1",
+    "jest": "^30.3.0",
+    "vitest": "^4.1.2"
   }
 }

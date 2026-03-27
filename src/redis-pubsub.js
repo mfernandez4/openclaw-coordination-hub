@@ -44,6 +44,8 @@ class RedisPubSub {
   async disconnect() {
     if (this.client) await this.client.quit();
     if (this.subscriber) await this.subscriber.quit();
+    this.client = null;
+    this.subscriber = null;
   }
 }
 
