@@ -12,7 +12,10 @@ const INBOX_KEY = `a2a:inbox:${AGENT_ID}`;
 console.log(`[${AGENT_ID}] Starting inbox worker...`);
 
 async function processTask() {
-  const redis = new Redis({ host: 'redis', port: 6379 });
+  const redis = new Redis({
+    host: process.env.REDIS_HOST || 'redis',
+    port: parseInt(process.env.REDIS_PORT) || 6379
+  });
   
   // Block-pop from inbox (like BLPOP but with timeout)
   const result = await redis.blpop(INBOX_KEY, 5);
