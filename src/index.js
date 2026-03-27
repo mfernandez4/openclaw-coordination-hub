@@ -16,6 +16,7 @@ const { MemoryBridge } = require('./memory-bridge');
 const { Mem0Adapter } = require('./mem0-adapter');
 const { TaskDispatcher } = require('./dispatcher');
 const { ResultProcessor } = require('./result-processor');
+const { logger } = require('./logger');
 
 class CoordinationHub {
   constructor(options = {}) {
@@ -30,48 +31,48 @@ class CoordinationHub {
   }
 
   async start() {
-    console.log('[Hub] Starting OpenClaw Coordination Hub...');
+    logger.info('hub', 'Starting OpenClaw Coordination Hub');
 
     // Initialize Redis Pub/Sub
     this.pubsub = new RedisPubSub();
     await this.pubsub.connect();
-    console.log('[Hub] Redis Pub/Sub connected');
+    logger.info('hub', 'Redis Pub/Sub connected');
 
     // Initialize Task Queue
     this.taskQueue = new TaskQueue();
     await this.taskQueue.connect();
-    console.log('[Hub] Task Queue connected');
+    logger.info('hub', 'Task Queue connected');
 
     // Initialize and start Task Dispatcher (routes tasks from coordination:tasks to typed queues)
     this.dispatcher = new TaskDispatcher();
     await this.dispatcher.start();
-    console.log('[Hub] Task Dispatcher started');
+    logger.info('hub', 'Task Dispatcher started');
 
     // Initialize and start ResultProcessor (processes and formats worker results)
     this.resultProcessor = new ResultProcessor();
     await this.resultProcessor.start();
-    console.log('[Hub] Result Processor started');
+    logger.info('hub', 'Result Processor started');
 
     // Initialize Memory Bridge (always-on)
     this.memoryBridge = new MemoryBridge();
-    console.log('[Hub] Memory Bridge initialized');
+    logger.info('hub', 'Memory Bridge initialized');
 
     // Initialize Mem0 (opt-in, disabled by default)
     this.mem0Adapter = new Mem0Adapter();
     await this.mem0Adapter.initialize();
     if (this.mem0Adapter.isEnabled()) {
-      console.log('[Hub] Mem0 integration ACTIVE');
+      logger.info('hub', 'Mem0 integration ACTIVE');
     } else {
-      console.log('[Hub] Mem0 disabled (opt-in mode)');
+      logger.info('hub', 'Mem0 disabled (opt-in mode)');
     }
 
     // Initialize A2A Adapter
     this.a2aAdapter = new A2AAdapter({ agentId: 'hub' });
     await this.a2aAdapter.initialize(this.pubsub);
-    console.log('[Hub] A2A Adapter initialized');
+    logger.info('hub', 'A2A Adapter initialized');
 
     this.running = true;
-    console.log('[Hub] Coordination Hub ready');
+    logger.info('hub', 'Coordination Hub ready');
   }
 
   async stop() {
@@ -80,7 +81,7 @@ class CoordinationHub {
     if (this.resultProcessor) await this.resultProcessor.stop();
     if (this.pubsub) await this.pubsub.disconnect();
     if (this.taskQueue) await this.taskQueue.disconnect();
-    console.log('[Hub] Stopped');
+    logger.info('hub', 'Stopped');
   }
 
   getStatus() {
@@ -100,7 +101,7 @@ class CoordinationHub {
 if (require.main === module) {
   const hub = new CoordinationHub();
   hub.start().catch(err => {
-    console.error('[Hub] Failed to start:', err);
+    logger.fatal('hub', 'Failed to start', { error: err.message });
     process.exit(1);
   });
 
