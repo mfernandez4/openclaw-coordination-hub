@@ -14,6 +14,7 @@ const { TaskQueue } = require('./task-queue');
 const { A2AAdapter } = require('./a2a-adapter');
 const { MemoryBridge } = require('./memory-bridge');
 const { Mem0Adapter } = require('./mem0-adapter');
+const { TaskDispatcher } = require('./dispatcher');
 
 class CoordinationHub {
   constructor(options = {}) {
@@ -22,6 +23,7 @@ class CoordinationHub {
     this.a2aAdapter = null;
     this.memoryBridge = null;
     this.mem0Adapter = null;
+    this.dispatcher = null;
     this.running = false;
   }
 
@@ -37,6 +39,11 @@ class CoordinationHub {
     this.taskQueue = new TaskQueue();
     await this.taskQueue.connect();
     console.log('[Hub] Task Queue connected');
+
+    // Initialize and start Task Dispatcher (routes tasks from coordination:tasks to typed queues)
+    this.dispatcher = new TaskDispatcher();
+    await this.dispatcher.start();
+    console.log('[Hub] Task Dispatcher started');
 
     // Initialize Memory Bridge (always-on)
     this.memoryBridge = new MemoryBridge();
@@ -62,6 +69,7 @@ class CoordinationHub {
 
   async stop() {
     this.running = false;
+    if (this.dispatcher) await this.dispatcher.stop();
     if (this.pubsub) await this.pubsub.disconnect();
     if (this.taskQueue) await this.taskQueue.disconnect();
     console.log('[Hub] Stopped');
@@ -72,6 +80,7 @@ class CoordinationHub {
       running: this.running,
       redis: this.pubsub ? 'connected' : 'disconnected',
       taskQueue: this.taskQueue ? 'connected' : 'disconnected',
+      dispatcher: this.dispatcher ? 'running' : 'stopped',
       mem0: this.mem0Adapter?.isEnabled() || false,
       a2a: this.a2aAdapter ? 'ready' : 'not_ready'
     };
