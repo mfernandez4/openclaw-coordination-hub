@@ -13,6 +13,7 @@ class RedisPubSub {
   constructor(options = {}) {
     this.host = options.host || process.env.REDIS_HOST || 'redis';
     this.port = options.port || process.env.REDIS_PORT || 6379;
+    this.RedisClient = options.redisFactory || Redis;
     this.client = null;
     this.subscriber = null;
     this.handlers = new Map();
@@ -47,48 +48,48 @@ class RedisPubSub {
 
   _setupClient(role, onReady) {
     return new Promise((resolve) => {
-      const redis = new Redis({ host: this.host, port: this.port });
+      const redis = new this.RedisClient({ host: this.host, port: this.port });
 
-    redis.on('connect', () => {
-      console.log(`[redis-pubsub:${role}] Connected to ${this.host}:${this.port}`);
-      this.reconnectFailures = 0;
-      this.status = 'connected';
-    });
+      redis.on('connect', () => {
+        console.log(`[redis-pubsub:${role}] Connected to ${this.host}:${this.port}`);
+        this.reconnectFailures = 0;
+        this.status = 'connected';
+      });
 
-    redis.on('ready', () => {
-      this.status = 'connected';
-      onReady(redis);
-      resolve(redis);
-    });
+      redis.on('ready', () => {
+        this.status = 'connected';
+        onReady(redis);
+        resolve(redis);
+      });
 
-    redis.on('error', (err) => {
-      console.error(`[redis-pubsub:${role}] Error: ${err.message}`);
-      this.status = 'error';
-    });
+      redis.on('error', (err) => {
+        console.error(`[redis-pubsub:${role}] Error: ${err.message}`);
+        this.status = 'error';
+      });
 
-    redis.on('close', () => {
-      if (!this.shuttingDown) {
-        console.error(`[redis-pubsub:${role}] Connection closed`);
-      }
-      this.status = 'disconnected';
-    });
+      redis.on('close', () => {
+        if (!this.shuttingDown) {
+          console.error(`[redis-pubsub:${role}] Connection closed`);
+        }
+        this.status = 'disconnected';
+      });
 
-    redis.on('reconnecting', () => {
-      if (!this.shuttingDown) {
-        console.log(`[redis-pubsub:${role}] Reconnecting... (attempt ${this.reconnectFailures + 1})`);
-      }
-    });
+      redis.on('reconnecting', () => {
+        if (!this.shuttingDown) {
+          console.log(`[redis-pubsub:${role}] Reconnecting... (attempt ${this.reconnectFailures + 1})`);
+        }
+      });
 
-    redis.on('end', () => {
-      if (this.shuttingDown) return;
+      redis.on('end', () => {
+        if (this.shuttingDown) return;
 
-      this.reconnectFailures++;
-      console.error(`[redis-pubsub:${role}] Reconnect failed (${this.reconnectFailures}/${MAX_RECONNECT_FAILURES})`);
-      if (this.reconnectFailures >= MAX_RECONNECT_FAILURES) {
-        console.error(`[redis-pubsub:${role}] Max reconnect failures reached. Exiting.`);
-        process.exit(1);
-      }
-    });
+        this.reconnectFailures++;
+        console.error(`[redis-pubsub:${role}] Reconnect failed (${this.reconnectFailures}/${MAX_RECONNECT_FAILURES})`);
+        if (this.reconnectFailures >= MAX_RECONNECT_FAILURES) {
+          console.error(`[redis-pubsub:${role}] Max reconnect failures reached. Exiting.`);
+          process.exit(1);
+        }
+      });
 
       // Store reference for cleanup
       if (role === 'pub') {
