@@ -6,7 +6,24 @@
 const BaseWorker = require('./base-worker');
 const fs = require('fs').promises;
 const path = require('path');
-const { exec: execPromise } = require('child_process');
+const { execFile } = require('child_process');
+
+// Allowed search directories (absolute paths only for safety)
+const ALLOWED_SEARCH_PATHS = ['/tmp', '/home', '/app', '/workspace'];
+const SHELL_METACHAR_REGEX = /[,;|`$(){}[\]<>\\!#*?"'&\n\r]/;
+
+function isShellSafe(str) {
+  return !SHELL_METACHAR_REGEX.test(str);
+}
+
+function isPathAllowed(p) {
+  try {
+    const resolved = path.resolve(p);
+    return ALLOWED_SEARCH_PATHS.some(allowed => resolved.startsWith(allowed));
+  } catch {
+    return false;
+  }
+}
 
 class CodingWorker extends BaseWorker {
   constructor(agentId, options = {}) {
@@ -98,21 +115,29 @@ class CodingWorker extends BaseWorker {
    */
   async searchCode(pattern, searchPath = '.') {
     try {
-      const command = `grep -r "${pattern}" ${searchPath} --include="*.js" --include="*.json" --include="*.md" --include="*.ts" --include="*.jsx" --include="*.tsx" -l 2>/dev/null || true`;
-      
+      // Validate inputs to prevent command injection
+      if (!isShellSafe(pattern)) {
+        return { error: 'Invalid pattern: contains forbidden shell characters' };
+      }
+      if (!isPathAllowed(searchPath)) {
+        return { error: `Invalid searchPath: ${searchPath} is not in allowed directories` };
+      }
+
+      const args = [
+        '-r', pattern, searchPath,
+        '--include=*.js', '--include=*.json', '--include=*.md',
+        '--include=*.ts', '--include=*.jsx', '--include=*.tsx', '-l'
+      ];
+
       return new Promise((resolve) => {
-        execPromise(command, { encoding: 'utf-8' })
-          .then(files => {
-            if (!files.trim()) {
-              resolve({ files: [], message: 'No matches found' });
-            } else {
-              const fileList = files.trim().split('\n').filter(f => f);
-              resolve({ files: fileList, count: fileList.length });
-            }
-          })
-          .catch(() => {
-            resolve({ files: [], message: 'No matches found' });
-          });
+        execFile('grep', args, { encoding: 'utf-8' }, (err, stdout) => {
+          if (err && err.code !== 1) { // grep returns 1 when no matches (not an error)
+            resolve({ files: [], message: `Search failed: ${err.message}` });
+            return;
+          }
+          const files = stdout.trim().split('\n').filter(f => f);
+          resolve({ files, count: files.length, message: files.length ? undefined : 'No matches found' });
+        });
       });
     } catch (error) {
       return { error: error.message };
@@ -124,16 +149,22 @@ class CodingWorker extends BaseWorker {
    */
   async runTests(projectPath = '.') {
     try {
-      const command = `cd ${projectPath} && npm test`;
-      
+      if (!isPathAllowed(projectPath)) {
+        return { output: '', success: false, error: `Invalid projectPath: ${projectPath} is not in allowed directories` };
+      }
+
       return new Promise((resolve) => {
-        execPromise(command, { encoding: 'utf-8', timeout: 120000 })
-          .then(stdout => {
+        execFile('npm', ['test'], {
+          encoding: 'utf-8',
+          timeout: 120000,
+          cwd: projectPath
+        }, (err, stdout, stderr) => {
+          if (err) {
+            resolve({ output: stdout + stderr, success: false, error: err.message });
+          } else {
             resolve({ output: stdout, success: true });
-          })
-          .catch(error => {
-            resolve({ output: error.message, success: false });
-          });
+          }
+        });
       });
     } catch (error) {
       return { error: error.message };
