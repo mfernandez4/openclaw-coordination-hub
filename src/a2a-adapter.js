@@ -18,6 +18,7 @@ class A2AAdapter {
     this.agentId = options.agentId || 'hub';
     this.messageTypes = ['task', 'result', 'error', 'heartbeat', 'handoff', 'negotiate', 'ack'];
     this.inboxQueue = `a2a:inbox:${this.agentId}`;
+    this.registryKey = 'a2a:registry';
     this.registry = new Map(); // agentId -> { status, capabilities, lastSeen }
   }
 
@@ -32,9 +33,17 @@ class A2AAdapter {
     
     // Subscribe to own inbox for directed messages
     await this.pubsub.subscribe(this.inboxQueue, this.handleInbox.bind(this));
-    
+
+    // Best-effort sync from Redis registry first to avoid split-brain on restart.
+    await this.syncRegistryFromRedis();
+
     // Register self
     this.registerAgent(this.agentId, { capabilities: this.getCapabilities() });
+    await this.syncAgentToRedis(this.agentId, {
+      capabilities: this.getCapabilities(),
+      status: 'online',
+      lastSeen: Date.now()
+    });
     
     console.log(`[A2A] ${this.agentId} initialized`);
     console.log(`[A2A] Inbox: ${this.inboxQueue}`);
@@ -66,6 +75,47 @@ class A2AAdapter {
     return this.getAllAgents().filter(a => now - a.lastSeen < 60000); // 60s timeout
   }
 
+  async syncRegistryFromRedis() {
+    if (!this.pubsub?.client) return;
+
+    try {
+      const entries = await this.pubsub.client.hgetall(this.registryKey);
+      if (!entries) return;
+
+      for (const [agentId, raw] of Object.entries(entries)) {
+        try {
+          const parsed = JSON.parse(raw);
+          this.registry.set(agentId, {
+            ...(this.registry.get(agentId) || {}),
+            ...parsed,
+            status: parsed.status || 'online',
+            lastSeen: typeof parsed.lastSeen === 'number' ? parsed.lastSeen : Date.now()
+          });
+        } catch {
+          // ignore malformed rows
+        }
+      }
+    } catch (err) {
+      console.error('[A2A] Redis registry sync failed:', err.message);
+    }
+  }
+
+  async syncAgentToRedis(agentId, metadata = {}) {
+    if (!this.pubsub?.client) return;
+
+    const entry = {
+      status: metadata.status || 'online',
+      capabilities: metadata.capabilities || [],
+      lastSeen: metadata.lastSeen || Date.now()
+    };
+
+    try {
+      await this.pubsub.client.hset(this.registryKey, agentId, JSON.stringify(entry));
+    } catch (err) {
+      console.error('[A2A] Redis registry write failed:', err.message);
+    }
+  }
+
   // ========== Message Handling ==========
 
   handleBroadcast(message) {
@@ -74,6 +124,12 @@ class A2AAdapter {
     if (message.to && message.to !== this.agentId && message.to !== '*') {
       return; // Not for us
     }
+
+    // Best-effort periodic pull from Redis to avoid local/remote drift.
+    if (message.type === 'heartbeat' || message.type === 'result') {
+      this.syncRegistryFromRedis().catch(() => {});
+    }
+
     this.handleMessage(message);
   }
 
@@ -206,11 +262,15 @@ class A2AAdapter {
 
   handleHeartbeat(from, payload) {
     // Update registry
-    const agent = this.registry.get(from);
-    if (agent) {
-      agent.status = payload.status || 'online';
-      agent.lastSeen = Date.now();
-    }
+    const current = this.registry.get(from) || { capabilities: [] };
+    const updated = {
+      ...current,
+      status: payload.status || 'online',
+      lastSeen: Date.now()
+    };
+
+    this.registry.set(from, updated);
+    this.syncAgentToRedis(from, updated).catch(() => {});
   }
 
   handleAck(from, to, payload) {
