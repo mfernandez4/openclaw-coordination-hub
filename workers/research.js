@@ -5,6 +5,10 @@
 
 const BaseWorker = require('./base-worker.js');
 
+// Search API configuration — set BRAVE_SEARCH_API_KEY env var to enable
+const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
+const SEARCH_API_URL = 'https://api.search.brave.com/res/v1/web/search';
+
 class ResearchWorker extends BaseWorker {
   constructor(options = {}) {
     super('research', options);
@@ -14,7 +18,7 @@ class ResearchWorker extends BaseWorker {
    * Get worker capabilities
    */
   getCapabilities() {
-    return ['web_search', 'web_fetch'];
+    return ['web_search', 'web_fetch', 'analyze'];
   }
 
   /**
@@ -50,24 +54,43 @@ class ResearchWorker extends BaseWorker {
 
     console.log(`[${this.agentId}] Searching for: ${query}`);
 
-    try {
-      const result = await web_search({
-        query,
-        count,
-        country,
-        freshness
-      });
-      
-      return {
-        success: true,
-        query,
-        results: result
-      };
-    } catch (error) {
+    if (!BRAVE_SEARCH_API_KEY) {
       return {
         success: false,
-        error: error.message
+        status: 'not_configured',
+        error: 'BRAVE_SEARCH_API_KEY env var not set. Web search is disabled.'
       };
+    }
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        count: count.toString(),
+        country,
+        ...(freshness ? { freshness } : {})
+      });
+
+      const response = await fetch(`${SEARCH_API_URL}?${params}`, {
+        headers: {
+          'Accept': 'application/json',
+          'X-Subscription-Token': BRAVE_SEARCH_API_KEY
+        }
+      });
+
+      if (!response.ok) {
+        return { success: false, error: `Search API returned ${response.status}: ${response.statusText}` };
+      }
+
+      const data = await response.json();
+      const results = (data.results || []).slice(0, count).map(r => ({
+        title: r.title,
+        url: r.url,
+        description: r.description
+      }));
+
+      return { success: true, query, count: results.length, results };
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   }
 
@@ -75,7 +98,7 @@ class ResearchWorker extends BaseWorker {
    * Handle web fetch task
    */
   async handleFetch(context) {
-    const { url, extractMode = 'markdown', maxChars = 50000 } = context;
+    const { url, maxChars = 50000 } = context;
     
     if (!url) {
       return { error: 'Missing url parameter' };
@@ -84,22 +107,29 @@ class ResearchWorker extends BaseWorker {
     console.log(`[${this.agentId}] Fetching: ${url}`);
 
     try {
-      const result = await web_fetch({
-        url,
-        extractMode,
-        maxChars
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'User-Agent': 'Mozilla/5.0 (compatible; CoordinationHub/1.0)'
+        },
+        signal: AbortSignal.timeout(15000)
       });
-      
+
+      if (!response.ok) {
+        return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+      }
+
+      const text = await response.text();
       return {
         success: true,
         url,
-        content: result
+        statusCode: response.status,
+        content: text.substring(0, maxChars),
+        truncated: text.length > maxChars,
+        fullLength: text.length
       };
     } catch (error) {
-      return {
-        success: false,
-        error: error.message
-      };
+      return { success: false, error: error.message };
     }
   }
 
