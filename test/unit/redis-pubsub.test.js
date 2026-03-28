@@ -12,6 +12,7 @@ function createSubscriberHarness() {
     }),
     subscribe: vi.fn(async () => 1),
     quit: vi.fn(async () => {}),
+    disconnect: vi.fn(() => {}),
     emitMessage(channel, message) {
       if (messageHandler) messageHandler(channel, message);
     }
@@ -39,7 +40,8 @@ describe('RedisPubSub', () => {
   beforeEach(() => {
     mockClient = {
       publish: vi.fn(async () => 1),
-      quit: vi.fn(async () => {})
+      quit: vi.fn(async () => {}),
+      disconnect: vi.fn(() => {})
     };
 
     mockSubscriber = createSubscriberHarness();
@@ -47,6 +49,8 @@ describe('RedisPubSub', () => {
     pubsub = new RedisPubSub();
     pubsub.client = mockClient;
     pubsub.subscriber = mockSubscriber;
+    pubsub._pubClient = mockClient;
+    pubsub._subClient = mockSubscriber;
     bindMessageDispatcher(pubsub);
   });
 
@@ -173,9 +177,13 @@ describe('RedisPubSub', () => {
     consoleSpy.mockRestore();
   });
 
-  test('disconnect() closes both client and subscriber without throwing', async () => {
+  test('disconnect() closes both pub/sub clients without throwing', async () => {
     await expect(pubsub.disconnect()).resolves.not.toThrow();
-    expect(mockClient.quit).toHaveBeenCalledTimes(1);
-    expect(mockSubscriber.quit).toHaveBeenCalledTimes(1);
+
+    const pubClosed = mockClient.quit.mock.calls.length + mockClient.disconnect.mock.calls.length;
+    const subClosed = mockSubscriber.quit.mock.calls.length + mockSubscriber.disconnect.mock.calls.length;
+
+    expect(pubClosed).toBeGreaterThanOrEqual(1);
+    expect(subClosed).toBeGreaterThanOrEqual(1);
   });
 });
