@@ -115,7 +115,7 @@ npm run test:coverage
 
 ## CI Quality Gates
 
-GitHub Actions runs two required suites on PRs/pushes to `main`:
+GitHub Actions runs two CI suites on PRs/pushes to `main`:
 
 1. **Unit Tests (Node 20)**
    - `npm ci --include=dev`

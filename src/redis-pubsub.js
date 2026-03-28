@@ -13,7 +13,12 @@ class RedisPubSub {
   constructor(options = {}) {
     this.host = options.host || process.env.REDIS_HOST || 'redis';
     this.port = options.port || process.env.REDIS_PORT || 6379;
-    this.RedisClient = options.redisFactory || Redis;
+    const RedisClientClass = options.redisClientClass || Redis;
+    if (typeof RedisClientClass === 'function') {
+      this.RedisClient = RedisClientClass;
+    } else {
+      throw new Error('options.redisClientClass must be a constructor function');
+    }
     this.client = null;
     this.subscriber = null;
     this.handlers = new Map();
