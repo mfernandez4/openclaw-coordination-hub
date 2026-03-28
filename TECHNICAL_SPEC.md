@@ -63,38 +63,44 @@ Main Agent
 
 ### 3.1 Agent Status
 
-Stored in Redis hashes with TTL:
+Stored in Redis hash `a2a:registry` with per-agent TTL keys for auto-eviction:
 
 ```
-Key: agents:status:<agent-id>
-Fields:
-  - status: "online" | "busy" | "idle" | "error"
-  - last_updated: ISO timestamp
-  - active_tasks: JSON array
-  - metadata: JSON object
-TTL: 300 seconds (auto-refresh)
+Key: a2a:registry (Redis hash)
+Field: <agent-id>
+Value: JSON { status, startedAt, capabilities }
+TTL Key: a2a:registry:<agent-id>:ttl
+TTL: heartbeat_interval × 3 (default: 30s × 3 = 90s)
 ```
+
+Workers auto-evict from the registry if they miss 3 consecutive heartbeats.
+Dead agents are excluded from `getOnlineAgents()` by checking the TTL key existence.
 
 ### 3.2 Channels
 
 | Channel | Purpose | Payload |
 |---------|---------|---------|
-| `agents:events` | Status changes | `{ agent_id, status, timestamp }` |
-| `tasks:events` | Task lifecycle | `{ task_id, status, assignee }` |
-| `workflows:events` | Workflow progress | `{ workflow_id, progress, stage }` |
+| `a2a:agents` | Broadcast to all agents | A2A message `{ type, from, to, payload, timestamp, id }` |
+| `a2a:coordination` | Worker results and coordination | result `{ type: 'result', agent, task, status, output, error }` |
+| `a2a:inbox:{agentId}` | Per-agent task inbox | task payload |
+| `a2a:results:{orchestratorId}` | Processed task results (default: `a2a:results:main`) | `{ raw, formatted }` |
+| `a2a:heartbeats` | Worker heartbeat pub/sub | `{ type, agent, status, currentTask, uptime, timestamp }` |
+| `a2a:registry` (hash) | Agent registry persisted to Redis | HSET/HGETALL; see section 3.1 |
 
 ### 3.3 Commands
 
 ```javascript
 // Publish status change
-redis.publish('agents:events', JSON.stringify({
+redis.publish('a2a:agents', JSON.stringify({
+  type: 'heartbeat',
+  from: 'hub',
   agent_id: 'research-001',
   status: 'busy',
   timestamp: new Date().toISOString()
 }))
 
-// Subscribe
-subscribe('agents:events', callback)
+// Subscribe to coordination channel
+subscribe('a2a:coordination', callback)
 ```
 
 ---
@@ -123,9 +129,13 @@ subscribe('agents:events', callback)
 
 ### 4.2 Queue Operations
 
-- `LPUSH tasks:queue:<priority> <task-json>` — Enqueue
-- `RPOP tasks:queue:<priority>` — Dequeue
-- `LRANGE tasks:queue:<priority> 0 -1` — Peek
+**Implementation note:** Priority queues (`tasks:queue:<priority>`) are documented in the spec but not yet implemented. The current implementation uses a single `coordination:tasks` queue with `LPUSH`/`BRPOP`. Priority queue support is tracked as a backlog item.
+
+- `LPUSH coordination:tasks <task-json>` — Enqueue (via `taskQueue.enqueue()`)
+- `BRPOP coordination:tasks <timeout>` — Dequeue (via `TaskDispatcher`)
+- `LPUSH tasks:<type> <task-json>` — Typed queue per worker type (coded, github-ops, research, dev-ops)
+
+**Dead-letter queue:** Tasks with unknown types are routed to `coordination:tasks:dlq` and a dead-letter result is published to `a2a:results:main`.
 
 ### 4.3 Workflow Orchestration
 
