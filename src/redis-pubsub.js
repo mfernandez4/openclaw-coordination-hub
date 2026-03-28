@@ -18,28 +18,36 @@ class RedisPubSub {
     this.handlers = new Map();
     this.status = 'disconnected';
     this.reconnectFailures = 0;
+    this.shuttingDown = false;
   }
 
   async connect() {
-    this._setupClient('pub', (client) => { this.client = client; });
-    this._setupClient('sub', (client) => {
-      this.subscriber = client;
-      this.subscriber.on('message', (channel, message) => {
-        const handler = this.handlers.get(channel);
-        if (handler) {
-          try {
-            handler(JSON.parse(message));
-          } catch (e) {
-            console.error(`[redis-pubsub] Message handler error on ${channel}:`, e.message);
+    this.shuttingDown = false;
+    await Promise.all([
+      this._setupClient('pub', (client) => {
+        this.client = client;
+      }),
+      this._setupClient('sub', (client) => {
+        this.subscriber = client;
+        this.subscriber.on('message', (channel, message) => {
+          const handler = this.handlers.get(channel);
+          if (handler) {
+            try {
+              handler(JSON.parse(message));
+            } catch (e) {
+              console.error(`[redis-pubsub] Message handler error on ${channel}:`, e.message);
+            }
           }
-        }
-      });
-    });
+        });
+      })
+    ]);
+
     return this;
   }
 
   _setupClient(role, onReady) {
-    const redis = new Redis({ host: this.host, port: this.port });
+    return new Promise((resolve) => {
+      const redis = new Redis({ host: this.host, port: this.port });
 
     redis.on('connect', () => {
       console.log(`[redis-pubsub:${role}] Connected to ${this.host}:${this.port}`);
@@ -50,6 +58,7 @@ class RedisPubSub {
     redis.on('ready', () => {
       this.status = 'connected';
       onReady(redis);
+      resolve(redis);
     });
 
     redis.on('error', (err) => {
@@ -58,15 +67,21 @@ class RedisPubSub {
     });
 
     redis.on('close', () => {
-      console.error(`[redis-pubsub:${role}] Connection closed`);
+      if (!this.shuttingDown) {
+        console.error(`[redis-pubsub:${role}] Connection closed`);
+      }
       this.status = 'disconnected';
     });
 
     redis.on('reconnecting', () => {
-      console.log(`[redis-pubsub:${role}] Reconnecting... (attempt ${this.reconnectFailures + 1})`);
+      if (!this.shuttingDown) {
+        console.log(`[redis-pubsub:${role}] Reconnecting... (attempt ${this.reconnectFailures + 1})`);
+      }
     });
 
     redis.on('end', () => {
+      if (this.shuttingDown) return;
+
       this.reconnectFailures++;
       console.error(`[redis-pubsub:${role}] Reconnect failed (${this.reconnectFailures}/${MAX_RECONNECT_FAILURES})`);
       if (this.reconnectFailures >= MAX_RECONNECT_FAILURES) {
@@ -75,12 +90,13 @@ class RedisPubSub {
       }
     });
 
-    // Store reference for cleanup
-    if (role === 'pub') {
-      this._pubClient = redis;
-    } else {
-      this._subClient = redis;
-    }
+      // Store reference for cleanup
+      if (role === 'pub') {
+        this._pubClient = redis;
+      } else {
+        this._subClient = redis;
+      }
+    });
   }
 
   async publish(channel, data) {
@@ -95,8 +111,24 @@ class RedisPubSub {
   }
 
   async disconnect() {
-    if (this._pubClient) { this._pubClient.disconnect(); }
-    if (this._subClient) { this._subClient.disconnect(); }
+    this.shuttingDown = true;
+
+    if (this._pubClient) {
+      try {
+        await this._pubClient.quit();
+      } catch {
+        this._pubClient.disconnect();
+      }
+    }
+
+    if (this._subClient) {
+      try {
+        await this._subClient.quit();
+      } catch {
+        this._subClient.disconnect();
+      }
+    }
+
     this.status = 'disconnected';
   }
 

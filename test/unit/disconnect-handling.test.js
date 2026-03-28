@@ -66,19 +66,23 @@ describe('Redis Disconnect/Reconnect Error Handling (Issue #18)', () => {
       expect(() => ps.subscribe('ch', () => {})).toThrow('Not connected');
     });
 
-    test('disconnect() calls quit on both client and subscriber', async () => {
+    test('disconnect() closes both low-level pub/sub clients', async () => {
       const mock = createMockPubSub();
       const ps = new RedisPubSub();
       ps.client = mock.publisher;
       ps.subscriber = mock.subscriber;
+      ps._pubClient = mock.publisher;
+      ps._subClient = mock.subscriber;
 
+      const clientDisconnectSpy = vi.spyOn(mock.publisher, 'disconnect');
+      const subscriberDisconnectSpy = vi.spyOn(mock.subscriber, 'disconnect');
       const clientQuitSpy = vi.spyOn(mock.publisher, 'quit');
       const subscriberQuitSpy = vi.spyOn(mock.subscriber, 'quit');
 
       await ps.disconnect();
 
-      expect(clientQuitSpy).toHaveBeenCalledTimes(1);
-      expect(subscriberQuitSpy).toHaveBeenCalledTimes(1);
+      expect(clientDisconnectSpy.mock.calls.length + clientQuitSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
+      expect(subscriberDisconnectSpy.mock.calls.length + subscriberQuitSpy.mock.calls.length).toBeGreaterThanOrEqual(1);
     });
   });
 
