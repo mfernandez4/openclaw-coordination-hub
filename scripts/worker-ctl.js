@@ -5,7 +5,7 @@
  * Usage: node worker-ctl.js start|stop|status [agent]
  */
 
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const path = require('path');
 
 const SCRIPTS_DIR = __dirname;
@@ -15,16 +15,15 @@ const agents = ['github-ops', 'coding', 'research', 'dev-ops'];
 
 function getRedisStatus() {
   try {
-    // Try to get worker status from Redis
-    const { createClient } = require('redis');
-    const client = createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
-    
-    client.on('error', () => null);
-    
-    // Synchronous attempt (won't work in async context)
-    return null;
+    // Try to get worker status from Redis via ioredis
+    const Redis = require('ioredis');
+    const client = new Redis({
+      host: process.env.REDIS_HOST || 'redis',
+      port: process.env.REDIS_PORT || 6379
+    });
+    client.quit();
+    return true;
   } catch (e) {
-    // Fallback: check via process list
     return null;
   }
 }
@@ -52,11 +51,15 @@ function startWorkers(specificAgent = null) {
   for (const agent of targetAgents) {
     const workerPath = path.join(HUB_DIR, 'workers', `${agent}.js`);
     try {
-      execSync(`node "${workerPath}" &`, { 
+      // Use spawn with detached:true and stdio:'ignore' so the worker
+      // continues running after worker-ctl.js exits (execSync would block)
+      const child = spawn('node', [workerPath], {
         cwd: HUB_DIR,
-        stdio: 'detached'
+        detached: true,
+        stdio: 'ignore'
       });
-      console.log(`  ✓ Started ${agent}`);
+      child.unref();
+      console.log(`  ✓ Started ${agent} (pid ${child.pid})`);
     } catch (e) {
       console.error(`  ✗ Failed to start ${agent}: ${e.message}`);
     }
