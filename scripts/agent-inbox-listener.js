@@ -11,7 +11,10 @@ const INBOX_CHANNEL = `a2a:inbox:${AGENT_ID}`;
 
 console.log(`[${AGENT_ID}] Starting inbox listener on ${INBOX_CHANNEL}...`);
 
-const subscriber = new Redis({ host: 'redis', port: 6379 });
+const subscriber = new Redis({
+  host: process.env.REDIS_HOST || 'redis',
+  port: parseInt(process.env.REDIS_PORT) || 6379
+});
 subscriber.subscribe(INBOX_CHANNEL);
 
 subscriber.on('message', (channel, msg) => {
@@ -36,7 +39,10 @@ subscriber.on('message', (channel, msg) => {
       console.log(`[${AGENT_ID}] Result:`, JSON.stringify(result));
       
       // Ack back via coordination channel
-      const redis = new Redis({ host: 'redis', port: 6379 });
+      const redis = new Redis({
+        host: process.env.REDIS_HOST || 'redis',
+        port: parseInt(process.env.REDIS_PORT) || 6379
+      });
       redis.publish('a2a:coordination', JSON.stringify({
         ...result,
         originalHandoff: payload
