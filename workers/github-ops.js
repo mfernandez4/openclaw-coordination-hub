@@ -3,8 +3,16 @@
  * Handles GitHub CLI (gh) and git operations
  */
 
-const { execSync } = require('child_process');
+const { execFile } = require('child_process');
 const BaseWorker = require('./base-worker');
+
+// Strict branch name validation — alphanumeric, slash, underscore, dot, hyphen only
+const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;
+const SHELL_METACHAR_REGEX = /[,;|`$(){}[\]<>\\!#*?"'&\n\r]/;
+
+function isBranchNameSafe(branch) {
+  return BRANCH_NAME_REGEX.test(branch) && !SHELL_METACHAR_REGEX.test(branch);
+}
 
 class GitHubOpsWorker extends BaseWorker {
   constructor(options = {}) {
@@ -19,23 +27,26 @@ class GitHubOpsWorker extends BaseWorker {
   }
 
   /**
-   * Execute shell command and return result
+   * Execute a command using execFile (no shell interpolation)
+   * Returns a promise for async use.
    */
-  execCommand(command) {
-    try {
-      const output = execSync(command, {
+  execCommandAsync(args) {
+    return new Promise((resolve) => {
+      execFile(args[0], args.slice(1), {
         encoding: 'utf-8',
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        stdio: ['pipe', 'pipe', 'pipe']
+        maxBuffer: 10 * 1024 * 1024
+      }, (err, stdout, stderr) => {
+        if (err) {
+          resolve({
+            success: false,
+            error: err.message,
+            stderr: stderr ? stderr.trim() : null
+          });
+        } else {
+          resolve({ success: true, output: stdout.trim() });
+        }
       });
-      return { success: true, output: output.trim() };
-    } catch (error) {
-      return {
-        success: false,
-        error: error.message,
-        stderr: error.stderr ? error.stderr.trim() : null
-      };
-    }
+    });
   }
 
   /**
@@ -49,25 +60,28 @@ class GitHubOpsWorker extends BaseWorker {
         if (!pr) {
           return { error: 'Missing required parameter: pr' };
         }
-        return this.execCommand(`gh pr view ${pr} --json title,state,url`);
+        return this.execCommandAsync(['gh', 'pr', 'view', pr, '--json', 'title,state,url']);
 
       case 'list-prs':
-        return this.execCommand(`gh pr list --json number,title,state,url`);
+        return this.execCommandAsync(['gh', 'pr', 'list', '--json', 'number,title,state,url']);
 
       case 'check-issue':
         if (!number) {
           return { error: 'Missing required parameter: number' };
         }
-        return this.execCommand(`gh issue view ${number}`);
+        return this.execCommandAsync(['gh', 'issue', 'view', number.toString()]);
 
       case 'list-issues':
-        return this.execCommand(`gh issue list --json number,title,state`);
+        return this.execCommandAsync(['gh', 'issue', 'list', '--json', 'number,title,state']);
 
       case 'create-branch':
         if (!branch) {
           return { error: 'Missing required parameter: branch' };
         }
-        return this.execCommand(`git checkout -b ${branch}`);
+        if (!isBranchNameSafe(branch)) {
+          return { error: 'Invalid branch name: contains forbidden characters or pattern' };
+        }
+        return this.execCommandAsync(['git', 'checkout', '-b', branch]);
 
       default:
         return { error: 'Unknown task' };
