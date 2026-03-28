@@ -19,6 +19,14 @@ function execDocker(args) {
   });
 }
 
+function isSafeComposeFilePath(value) {
+  if (!value || typeof value !== 'string') return false;
+  if (value.includes('..') || value.includes('\0')) return false;
+  // Allow relative/absolute compose file paths with basic safe characters only.
+  if (!/^[a-zA-Z0-9_./-]+$/.test(value)) return false;
+  return value.endsWith('.yml') || value.endsWith('.yaml');
+}
+
 class DevOpsWorker extends BaseWorker {
   constructor(agentId = 'dev-ops', options = {}) {
     super(agentId, options);
@@ -56,23 +64,34 @@ class DevOpsWorker extends BaseWorker {
    */
   async handleDeploy(context) {
     const { target, projectPath } = context;
-    if (!target && !projectPath) {
-      return { success: false, error: 'Missing required: target or projectPath' };
+    const composeFile = projectPath || target;
+
+    if (!composeFile) {
+      return { success: false, error: 'Missing required: projectPath (compose file path)' };
     }
 
-    const project = target || projectPath;
-    const result = await execDocker(['compose', '-f', project, 'up', '-d', '--pull', 'always']);
+    if (!isSafeComposeFilePath(composeFile)) {
+      return {
+        success: false,
+        error: 'Invalid compose file path. Expected safe .yml/.yaml path without traversal.'
+      };
+    }
+
+    const result = await execDocker(['compose', '-f', composeFile, 'up', '-d', '--pull', 'always']);
 
     if (result.success) {
-      return { success: true, message: `Deployed ${project}`, output: result.stdout };
-    } else {
-      // Fallback for non-compose targets (e.g., docker run)
-      const runResult = await execDocker(['run', '-d', '--name', target, target]);
-      if (runResult.success) {
-        return { success: true, message: `Container ${target} started`, output: runResult.stdout };
-      }
-      return { success: false, error: `Deploy failed: ${result.error}`, detail: result.stderr };
+      return {
+        success: true,
+        message: `Deployed compose stack from ${composeFile}`,
+        output: result.stdout
+      };
     }
+
+    return {
+      success: false,
+      error: `Deploy failed: ${result.error}`,
+      detail: result.stderr
+    };
   }
 
   /**
