@@ -74,6 +74,32 @@ npm install
 npm start
 ```
 
+## Testing
+
+Default test command runs only fast unit tests (no live Redis required):
+
+```bash
+npm test
+# or
+npm run test:unit
+```
+
+Run live Redis integration tests (A2A end-to-end flow):
+
+```bash
+REDIS_HOST=redis REDIS_PORT=6379 npm run test:integration
+```
+
+If Redis is unreachable, integration tests fail quickly with a clear error message.
+
+`node scripts/a2a-test.js` remains available as an optional manual smoke test and is intentionally separate from automated test runs.
+
+Generate coverage for unit tests:
+
+```bash
+npm run test:coverage
+```
+
 ## Configuration
 
 Set environment variables:
