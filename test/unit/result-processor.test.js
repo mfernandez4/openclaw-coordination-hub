@@ -5,6 +5,7 @@
  * audit log TTL, result channel routing, and disconnect handling.
  */
 const ResultProcessor = require('../../src/result-processor');
+const { logger } = require('../../src/logger');
 const { createMockRedis } = require('../helpers/redis');
 
 describe('ResultProcessor', () => {
@@ -288,14 +289,17 @@ describe('ResultProcessor', () => {
       startProcessor.publisher = mockPublisher;
     });
 
-    const parseErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const parseErrorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
 
     await startProcessor.start();
 
     await expect(messageHandlers.message('a2a:coordination', '{not-json')).resolves.toBeUndefined();
     expect(parseErrorSpy).toHaveBeenCalledWith(
-      '[result-processor] Parse error:',
-      expect.stringMatching(/Unexpected token|Expected property name/)
+      'result-processor',
+      'Parse error',
+      expect.objectContaining({
+        error: expect.stringMatching(/Unexpected token|Expected property name/)
+      })
     );
 
     parseErrorSpy.mockRestore();

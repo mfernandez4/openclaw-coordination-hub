@@ -9,6 +9,7 @@
  */
 
 const fs = require('fs');
+const { logger } = require('./logger');
 const path = require('path');
 
 const COORDINATION_CHANNEL = 'a2a:coordination';
@@ -54,7 +55,7 @@ class ResultProcessor {
         return { ...defaultConfig, ...userConfig };
       }
     } catch (e) {
-      console.error('[result-processor] Config load error:', e.message);
+      logger.error('result-processor', 'Config load error', { error: e.message });
     }
 
     return defaultConfig;
@@ -65,7 +66,7 @@ class ResultProcessor {
    */
   reloadConfig() {
     this.config = this.loadConfig();
-    console.log('[result-processor] Config reloaded');
+    logger.info('result-processor', 'Config reloaded');
   }
 
   /**
@@ -82,7 +83,7 @@ class ResultProcessor {
       host: process.env.REDIS_HOST || 'redis',
       port: process.env.REDIS_PORT || 6379
     });
-    console.log('[result-processor] Connected to Redis');
+    logger.info('result-processor', 'Connected to Redis');
   }
 
   /**
@@ -208,13 +209,13 @@ class ResultProcessor {
    * Process a result
    */
   async processResult(rawResult) {
-    console.log('[result-processor] Processing result:', rawResult.taskId);
+    logger.debug('result-processor', 'Processing result', { taskId: rawResult.taskId });
 
     // Apply filters
     const { filtered, passed, reason } = this.applyFilters(rawResult);
 
     if (!passed) {
-      console.log('[result-processor] Result blocked:', reason);
+      logger.warn('result-processor', 'Result blocked', { reason });
       // Could publish to a2a:blocked for audit
       return null;
     }
@@ -244,7 +245,7 @@ class ResultProcessor {
     // Keep only last 100 results
     await this.publisher.ltrim(resultsKey, 0, 99);
 
-    console.log('[result-processor] Published to', targetChannel);
+    logger.info('result-processor', 'Published result', { channel: targetChannel });
 
     // Audit log if enabled
     if (this.config.policies.auditLog) {
@@ -264,7 +265,7 @@ class ResultProcessor {
 
     // Subscribe to coordination channel
     await this.subscriber.subscribe(COORDINATION_CHANNEL);
-    console.log('[result-processor] Subscribed to', COORDINATION_CHANNEL);
+    logger.info('result-processor', 'Subscribed', { channel: COORDINATION_CHANNEL });
 
     // Listen for results
     this.subscriber.on('message', async (channel, message) => {
@@ -277,11 +278,11 @@ class ResultProcessor {
           await this.processResult(result);
         }
       } catch (e) {
-        console.error('[result-processor] Parse error:', e.message);
+        logger.error('result-processor', 'Parse error', { error: e.message });
       }
     });
 
-    console.log('[result-processor] Running');
+    logger.info('result-processor', 'Running');
   }
 
   /**
@@ -296,7 +297,7 @@ class ResultProcessor {
     if (this.publisher) {
       await this.publisher.quit();
     }
-    console.log('[result-processor] Stopped');
+    logger.info('result-processor', 'Stopped');
   }
 }
 
@@ -315,7 +316,7 @@ if (require.main === module) {
   });
 
   processor.start().catch(err => {
-    console.error('[result-processor] Failed to start:', err);
+    logger.fatal('result-processor', 'Failed to start', { error: err.message });
     process.exit(1);
   });
 }
