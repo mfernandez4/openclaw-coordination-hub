@@ -113,6 +113,20 @@ Generate coverage for unit tests:
 npm run test:coverage
 ```
 
+## CI Quality Gates
+
+GitHub Actions runs two required suites on PRs/pushes to `main`:
+
+1. **Unit Tests (Node 20)**
+   - `npm ci --include=dev`
+   - `npm run test:unit`
+2. **Integration Tests (Redis + Node 20)**
+   - Starts Redis service container
+   - `npm ci --include=dev`
+   - `npm run test:integration`
+
+Workflow file: `.github/workflows/ci.yml`
+
 ## Configuration
 
 Set environment variables:
