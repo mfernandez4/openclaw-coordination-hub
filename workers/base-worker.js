@@ -44,9 +44,10 @@ class BaseWorker extends EventEmitter {
    */
   async register() {
     const ttl = Math.floor((this.heartbeatInterval * 3) / 1000); // seconds
+    this.startedAt = new Date().toISOString(); // preserved in every heartbeat HSET
     const entry = JSON.stringify({
       status: 'online',
-      startedAt: new Date().toISOString(),
+      startedAt: this.startedAt,
       capabilities: this.getCapabilities()
     });
     await this.redis.hset(this.registryKey, this.agentId, entry);
@@ -155,9 +156,11 @@ class BaseWorker extends EventEmitter {
     const entry = JSON.stringify({
       status: heartbeat.status,
       capabilities: this.getCapabilities(),
-      lastSeen: Date.now()
+      lastSeen: Date.now(),
+      startedAt: this.startedAt  // preserved from register() — not dropped on heartbeat
     });
     await this.redis.hset(this.registryKey, this.agentId, entry);
+    await this.redis.expire(this.registryKey, ttl); // renew hash TTL so key doesn't expire mid-flight
     await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
   }
 
