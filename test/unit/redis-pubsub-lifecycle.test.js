@@ -32,7 +32,7 @@ async function waitForClients(clients, expectedCount, timeoutMs = 200) {
 describe('RedisPubSub lifecycle behavior', () => {
   test('connect() waits until both pub/sub clients emit ready', async () => {
     const { FakeRedis, clients } = createFakeRedisFactory();
-    const pubsub = new RedisPubSub({ redisFactory: FakeRedis, host: '127.0.0.1', port: 6379 });
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis, host: '127.0.0.1', port: 6379 });
 
     const connectPromise = pubsub.connect();
     await waitForClients(clients, 2);
@@ -59,7 +59,7 @@ describe('RedisPubSub lifecycle behavior', () => {
 
   test('disconnect() prefers quit() and falls back to disconnect() when quit fails', async () => {
     const { FakeRedis, clients } = createFakeRedisFactory();
-    const pubsub = new RedisPubSub({ redisFactory: FakeRedis, host: '127.0.0.1', port: 6379 });
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis, host: '127.0.0.1', port: 6379 });
 
     const connectPromise = pubsub.connect();
     await waitForClients(clients, 2);
@@ -85,7 +85,7 @@ describe('RedisPubSub lifecycle behavior', () => {
 
   test('end event does not trigger process.exit during intentional shutdown', async () => {
     const { FakeRedis, clients } = createFakeRedisFactory();
-    const pubsub = new RedisPubSub({ redisFactory: FakeRedis, host: '127.0.0.1', port: 6379 });
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis, host: '127.0.0.1', port: 6379 });
 
     const connectPromise = pubsub.connect();
     await waitForClients(clients, 2);
@@ -110,7 +110,7 @@ describe('RedisPubSub lifecycle behavior', () => {
 
   test('end event exits process after max reconnect failures', async () => {
     const { FakeRedis, clients } = createFakeRedisFactory();
-    const pubsub = new RedisPubSub({ redisFactory: FakeRedis, host: '127.0.0.1', port: 6379 });
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis, host: '127.0.0.1', port: 6379 });
 
     const connectPromise = pubsub.connect();
     await waitForClients(clients, 2);

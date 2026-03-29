@@ -4,7 +4,7 @@
  * Tests: processResult() formatting, filter application,
  * audit log TTL, result channel routing, and disconnect handling.
  */
-const ResultProcessor = require('../../src/result-processor');
+const { ResultProcessor } = require('../../src/result-processor');
 const { logger } = require('../../src/logger');
 const { createMockRedis } = require('../helpers/redis');
 

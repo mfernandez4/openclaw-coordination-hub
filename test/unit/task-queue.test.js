@@ -4,10 +4,15 @@
 const { TaskQueue } = require('../../src/task-queue');
 const { createMockRedis } = require('../helpers/redis');
 
+// Simulates priority-ordered BRPOP: tries each key in order, returns from first non-empty
 function mockBrpopWithRpop(redis) {
-  return vi.fn(async (queueName) => {
-    const item = await redis.rpop(queueName);
-    return item === null ? null : [queueName, item];
+  return vi.fn(async (...args) => {
+    const keys = args.slice(0, -1); // last arg is timeout
+    for (const key of keys) {
+      const item = await redis.rpop(key);
+      if (item !== null) return [key, item];
+    }
+    return null;
   });
 }
 
@@ -32,12 +37,13 @@ describe('TaskQueue', () => {
     }
   });
 
-  test('enqueue() adds task to Redis list', async () => {
+  test('enqueue() adds task to Redis list (normal priority by default)', async () => {
     const task = { type: 'coding', task: 'list-files', context: { path: '/tmp' } };
     const id = await tq.enqueue(task);
     expect(id).toMatch(/^task:\d+:/);
 
-    const list = await mockRedis.lrange(tq.queueName, 0, -1);
+    // No priority → goes to :normal queue
+    const list = await mockRedis.lrange(`${tq.queueName}:normal`, 0, -1);
     expect(list).toHaveLength(1);
     const stored = JSON.parse(list[0]);
     expect(stored.id).toBe(id);
@@ -58,9 +64,9 @@ describe('TaskQueue', () => {
     await expect(disconnectedQueue.enqueue({ type: 'x' })).rejects.toThrow('Not connected');
   });
 
-  test('dequeue() removes and returns the oldest entry (FIFO)', async () => {
-    await tq.enqueue({ type: 'first' });
-    await tq.enqueue({ type: 'second' });
+  test('dequeue() removes and returns the oldest entry (FIFO within same priority)', async () => {
+    await tq.enqueue({ type: 'first', priority: 'normal' });
+    await tq.enqueue({ type: 'second', priority: 'normal' });
 
     tq.client.brpop = mockBrpopWithRpop(mockRedis);
 
@@ -87,17 +93,18 @@ describe('TaskQueue', () => {
   });
 
   test('dequeue() consumes tasks (queue shrinks)', async () => {
-    await tq.enqueue({ type: 'task-a' });
-    await tq.enqueue({ type: 'task-b' });
+    await tq.enqueue({ type: 'task-a', priority: 'normal' });
+    await tq.enqueue({ type: 'task-b', priority: 'normal' });
 
     tq.client.brpop = mockBrpopWithRpop(mockRedis);
 
-    const lenBefore = await mockRedis.llen(tq.queueName);
+    const normalQueue = `${tq.queueName}:normal`;
+    const lenBefore = await mockRedis.llen(normalQueue);
     expect(lenBefore).toBe(2);
 
     await tq.dequeue(1);
 
-    const lenAfter = await mockRedis.llen(tq.queueName);
+    const lenAfter = await mockRedis.llen(normalQueue);
     expect(lenAfter).toBe(1);
   });
 
@@ -115,5 +122,61 @@ describe('TaskQueue', () => {
     await tq2.disconnect();
 
     expect(quitSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Priority queue routing ──────────────────────────────────────────────────
+
+  test('enqueue() with priority:high writes to coordination:tasks:high', async () => {
+    await tq.enqueue({ type: 'coding', priority: 'high' });
+    const len = await mockRedis.llen('coordination:tasks:high');
+    expect(len).toBe(1);
+    // other queues untouched
+    expect(await mockRedis.llen('coordination:tasks:normal')).toBe(0);
+    expect(await mockRedis.llen('coordination:tasks:low')).toBe(0);
+  });
+
+  test('enqueue() with priority:low writes to coordination:tasks:low', async () => {
+    await tq.enqueue({ type: 'research', priority: 'low' });
+    expect(await mockRedis.llen('coordination:tasks:low')).toBe(1);
+    expect(await mockRedis.llen('coordination:tasks:high')).toBe(0);
+  });
+
+  test('enqueue() with no priority defaults to coordination:tasks:normal', async () => {
+    await tq.enqueue({ type: 'github-ops' });
+    expect(await mockRedis.llen('coordination:tasks:normal')).toBe(1);
+    const item = JSON.parse(await mockRedis.rpop('coordination:tasks:normal'));
+    expect(item.priority).toBe('normal');
+  });
+
+  test('enqueue() with unknown priority falls back to normal', async () => {
+    await tq.enqueue({ type: 'x', priority: 'urgent' });
+    expect(await mockRedis.llen('coordination:tasks:normal')).toBe(1);
+  });
+
+  test('dequeue() drains high before normal before low', async () => {
+    // Seed all three queues
+    await tq.enqueue({ type: 'low-task', priority: 'low' });
+    await tq.enqueue({ type: 'normal-task', priority: 'normal' });
+    await tq.enqueue({ type: 'high-task', priority: 'high' });
+
+    // Mock brpop to simulate priority ordering (returns first non-empty key)
+    const origBrpop = mockRedis.brpop.bind(mockRedis);
+    tq.client.brpop = vi.fn(async (...args) => {
+      const timeout = args[args.length - 1];
+      const keys = args.slice(0, -1);
+      for (const key of keys) {
+        const item = await mockRedis.rpop(key);
+        if (item !== null) return [key, item];
+      }
+      return null;
+    });
+
+    const first = await tq.dequeue(1);
+    const second = await tq.dequeue(1);
+    const third = await tq.dequeue(1);
+
+    expect(first.type).toBe('high-task');
+    expect(second.type).toBe('normal-task');
+    expect(third.type).toBe('low-task');
   });
 });

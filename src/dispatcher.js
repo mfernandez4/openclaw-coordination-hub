@@ -19,7 +19,12 @@ const TYPE_TO_QUEUE = {
   'dev-ops': 'a2a:inbox:dev-ops'
 };
 
-const COORDINATION_QUEUE = 'coordination:tasks';
+const COORDINATION_BASE = 'coordination:tasks';
+const PRIORITY_QUEUES = [
+  `${COORDINATION_BASE}:high`,
+  `${COORDINATION_BASE}:normal`,
+  `${COORDINATION_BASE}:low`
+];
 const RESULTS_CHANNEL = 'a2a:results:main';
 const DLQ_SUFFIX = ':dlq';
 
@@ -54,7 +59,7 @@ class TaskDispatcher {
    * Dead-letter an unroutable task
    */
   async deadLetter(task, reason) {
-    const dlqKey = `${COORDINATION_QUEUE}${DLQ_SUFFIX}`;
+    const dlqKey = `${COORDINATION_BASE}${DLQ_SUFFIX}`;
     const deadLettered = {
       ...task,
       _deadLettered: true,
@@ -107,11 +112,11 @@ class TaskDispatcher {
    * Poll and route loop
    */
   async run() {
-    console.log('[dispatcher] Starting poll loop on', COORDINATION_QUEUE);
+    console.log('[dispatcher] Starting poll loop (priority order: high → normal → low)');
 
     while (this.running) {
       try {
-        const result = await this.client.brpop(COORDINATION_QUEUE, this.pollTimeout);
+        const result = await this.client.brpop(...PRIORITY_QUEUES, this.pollTimeout);
 
         if (!result) {
           continue; // Timeout, keep polling
