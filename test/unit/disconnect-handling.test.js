@@ -6,7 +6,7 @@
  */
 const { TaskQueue } = require('../../src/task-queue');
 const { RedisPubSub } = require('../../src/redis-pubsub');
-const ResultProcessor = require('../../src/result-processor');
+const { ResultProcessor } = require('../../src/result-processor');
 const { createMockRedis, createMockPubSub } = require('../helpers/redis');
 
 describe('Redis Disconnect/Reconnect Error Handling (Issue #18)', () => {

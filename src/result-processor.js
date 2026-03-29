@@ -321,4 +321,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = ResultProcessor;
+module.exports = { ResultProcessor };
