@@ -123,14 +123,20 @@ describe('RedisPubSub lifecycle behavior', () => {
     await connectPromise;
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    vi.useFakeTimers();
 
     for (let i = 0; i < 5; i++) {
       clients[0].emit('end');
     }
 
     expect(pubsub.reconnectFailures).toBe(5);
+    expect(process.exitCode).toBe(1);
+
+    // Advance past the 100ms flush delay and confirm exit is called
+    await vi.runAllTimersAsync();
     expect(exitSpy).toHaveBeenCalledWith(1);
 
+    vi.useRealTimers();
     exitSpy.mockRestore();
   });
 });

@@ -5,6 +5,7 @@
 
 const EventEmitter = require('events');
 const { ArtifactStore } = require('../src/artifact-store');
+const { logger } = require('../src/logger');
 
 class BaseWorker extends EventEmitter {
   constructor(agentId, options = {}) {
@@ -34,7 +35,7 @@ class BaseWorker extends EventEmitter {
       host: process.env.REDIS_HOST || 'redis',
       port: process.env.REDIS_PORT || 6379
     });
-    console.log(`[${this.agentId}] Connected to Redis`);
+    logger.info(this.agentId, 'Connecting to Redis');
   }
 
   /**
@@ -52,7 +53,7 @@ class BaseWorker extends EventEmitter {
     await this.redis.expire(this.registryKey, ttl); // expire key if all agents vanish
     // Also set TTL on the specific field via a separate TTL key
     await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
-    console.log(`[${this.agentId}] Registered as online (TTL: ${ttl}s)`);
+    logger.info(this.agentId, `Registered as online (TTL: ${ttl}s)`, { ttl });
   }
 
   /**
@@ -61,7 +62,7 @@ class BaseWorker extends EventEmitter {
   async deregister() {
     await this.redis.hdel(this.registryKey, this.agentId);
     await this.redis.del(`${this.registryKey}:${this.agentId}:ttl`);
-    console.log(`[${this.agentId}] Deregistered`);
+    logger.info(this.agentId, 'Deregistered');
   }
 
   /**
@@ -130,7 +131,7 @@ class BaseWorker extends EventEmitter {
    */
   async publishResult(result) {
     await this.redis.publish(this.coordinationChannel, JSON.stringify(result));
-    console.log(`[${this.agentId}] Result published: ${result.status}`);
+    logger.info(this.agentId, `Result published: ${result.status}`, { status: result.status });
   }
 
   /**
@@ -155,15 +156,15 @@ class BaseWorker extends EventEmitter {
     try {
       // BLPOP returns [key, message] or null
       const result = await this.redis.blpop(this.inboxKey, this.pollTimeout);
-      
+
       if (!result) {
         return null; // No task, timeout
       }
-      
+
       const [key, message] = result;
       return JSON.parse(message);
     } catch (error) {
-      console.error(`[${this.agentId}] Poll error:`, error.message);
+      logger.error(this.agentId, 'Poll error', { error: error.message });
       return null;
     }
   }
@@ -173,42 +174,42 @@ class BaseWorker extends EventEmitter {
    */
   async start() {
     if (this.running) {
-      console.warn(`[${this.agentId}] Already running`);
+      logger.warn(this.agentId, 'Already running');
       return;
     }
-    
+
     await this.connect();
     await this.register();
-    
+
     this.running = true;
-    console.log(`[${this.agentId}] Worker started, polling ${this.inboxKey}`);
-    
+    logger.info(this.agentId, `Worker started, polling ${this.inboxKey}`, { inbox: this.inboxKey });
+
     // Start heartbeat interval
     this.heartbeatTimer = setInterval(() => this.sendHeartbeat(), this.heartbeatInterval);
-    
+
     // Main loop
     while (this.running) {
       const taskPayload = await this.pollTask();
-      
+
       if (!taskPayload) {
         continue; // Timeout, keep polling
       }
-      
-      console.log(`[${this.agentId}] Received task: ${taskPayload.task}`);
-      
+
+      logger.info(this.agentId, `Received task: ${taskPayload.task}`, { task: taskPayload.task });
+
       this.startTime = Date.now();
       this.currentTask = taskPayload.task;
-      
+
       try {
         const result = await this.processTask(taskPayload);
         const formattedResult = this.formatResult(taskPayload, result, 'completed');
         await this.publishResult(formattedResult);
       } catch (error) {
-        console.error(`[${this.agentId}] Task error:`, error.message);
+        logger.error(this.agentId, 'Task error', { error: error.message, task: taskPayload.task });
         const errorResult = this.formatResult(taskPayload, null, 'failed', error.message);
         await this.publishResult(errorResult);
       }
-      
+
       this.currentTask = null;
       this.startTime = null;
     }
@@ -218,27 +219,27 @@ class BaseWorker extends EventEmitter {
    * Stop the worker gracefully
    */
   async stop() {
-    console.log(`[${this.agentId}] Stopping...`);
+    logger.info(this.agentId, 'Stopping...');
     this.running = false;
-    
+
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
     }
-    
+
     // Wait for current task to finish (max 30s)
     let waited = 0;
     while (this.currentTask && waited < 30000) {
       await new Promise(r => setTimeout(r, 100));
       waited += 100;
     }
-    
+
     await this.deregister();
-    
+
     if (this.redis) {
       await this.redis.quit();
     }
-    
-    console.log(`[${this.agentId}] Stopped`);
+
+    logger.info(this.agentId, 'Stopped');
   }
 }
 

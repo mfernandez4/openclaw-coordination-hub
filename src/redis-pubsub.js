@@ -1,11 +1,12 @@
 /**
  * Redis Pub/Sub client for real-time agent messaging
- * 
+ *
  * Includes error event handlers for disconnect detection.
  * On disconnect: logs structured error, updates status, exits after
  * max reconnect attempts so Docker can restart the container.
  */
 const Redis = require('ioredis');
+const { logger } = require('./logger');
 
 const MAX_RECONNECT_FAILURES = 5;
 
@@ -41,7 +42,7 @@ class RedisPubSub {
             try {
               handler(JSON.parse(message));
             } catch (e) {
-              console.error(`[redis-pubsub] Message handler error on ${channel}:`, e.message);
+              logger.error('redis-pubsub', `Message handler error on ${channel}`, { error: e.message });
             }
           }
         });
@@ -56,7 +57,7 @@ class RedisPubSub {
       const redis = new this.RedisClient({ host: this.host, port: this.port });
 
       redis.on('connect', () => {
-        console.log(`[redis-pubsub:${role}] Connected to ${this.host}:${this.port}`);
+        logger.info('redis-pubsub', `Connected to ${this.host}:${this.port}`, { role });
         this.reconnectFailures = 0;
         this.status = 'connected';
       });
@@ -68,20 +69,20 @@ class RedisPubSub {
       });
 
       redis.on('error', (err) => {
-        console.error(`[redis-pubsub:${role}] Error: ${err.message}`);
+        logger.error('redis-pubsub', `Error: ${err.message}`, { role, error: err.message });
         this.status = 'error';
       });
 
       redis.on('close', () => {
         if (!this.shuttingDown) {
-          console.error(`[redis-pubsub:${role}] Connection closed`);
+          logger.error('redis-pubsub', 'Connection closed', { role });
         }
         this.status = 'disconnected';
       });
 
       redis.on('reconnecting', () => {
         if (!this.shuttingDown) {
-          console.log(`[redis-pubsub:${role}] Reconnecting... (attempt ${this.reconnectFailures + 1})`);
+          logger.info('redis-pubsub', `Reconnecting... (attempt ${this.reconnectFailures + 1})`, { role });
         }
       });
 
@@ -89,10 +90,11 @@ class RedisPubSub {
         if (this.shuttingDown) return;
 
         this.reconnectFailures++;
-        console.error(`[redis-pubsub:${role}] Reconnect failed (${this.reconnectFailures}/${MAX_RECONNECT_FAILURES})`);
+        logger.error('redis-pubsub', `Reconnect failed (${this.reconnectFailures}/${MAX_RECONNECT_FAILURES})`, { role });
         if (this.reconnectFailures >= MAX_RECONNECT_FAILURES) {
-          console.error(`[redis-pubsub:${role}] Max reconnect failures reached. Exiting.`);
-          process.exit(1);
+          logger.fatal('redis-pubsub', 'Max reconnect failures reached. Exiting.', { role, reconnectFailures: this.reconnectFailures, host: this.host, port: this.port });
+          process.exitCode = 1;
+          setTimeout(() => process.exit(1), 100);
         }
       });
 

@@ -4,6 +4,7 @@
  */
 
 const BaseWorker = require('./base-worker.js');
+const { logger } = require('../src/logger');
 
 // Search API configuration — set BRAVE_SEARCH_API_KEY env var to enable
 const BRAVE_SEARCH_API_KEY = process.env.BRAVE_SEARCH_API_KEY;
@@ -52,7 +53,7 @@ class ResearchWorker extends BaseWorker {
       return { error: 'Missing query parameter' };
     }
 
-    console.log(`[${this.agentId}] Searching for: ${query}`);
+    logger.info(this.agentId, `Searching for: ${query}`, { query });
 
     if (!BRAVE_SEARCH_API_KEY) {
       return {
@@ -104,7 +105,7 @@ class ResearchWorker extends BaseWorker {
       return { error: 'Missing url parameter' };
     }
 
-    console.log(`[${this.agentId}] Fetching: ${url}`);
+    logger.info(this.agentId, `Fetching: ${url}`, { url });
 
     try {
       const response = await fetch(url, {
@@ -143,7 +144,7 @@ class ResearchWorker extends BaseWorker {
       return { error: 'Missing text parameter' };
     }
 
-    console.log(`[${this.agentId}] Analyzing text (${text.length} chars)`);
+    logger.info(this.agentId, `Analyzing text (${text.length} chars)`, { length: text.length });
 
     // Simple analysis - could be extended with more sophisticated processing
     const wordCount = text.split(/\s+/).filter(w => w.length > 0).length;
@@ -188,8 +189,8 @@ if (require.main === module) {
   });
   
   worker.start().catch(err => {
-    console.error('Worker failed to start:', err);
-    process.exit(1);
+    logger.fatal('research', 'Worker failed to start', { error: err.message, stack: err.stack });
+    process.exitCode = 1;
   });
 }
 

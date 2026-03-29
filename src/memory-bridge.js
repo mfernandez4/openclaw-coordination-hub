@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { logger } = require('./logger');
 
 class MemoryBridge {
   constructor(options = {}) {
@@ -23,7 +24,7 @@ class MemoryBridge {
    */
   async getRecentSessions(hours = 24) {
     if (!fs.existsSync(this.journalPath)) {
-      console.warn('[MemoryBridge] journal.jsonl not found — returning empty sessions');
+      logger.warn('memory-bridge', 'journal.jsonl not found — returning empty sessions');
       return [];
     }
 
@@ -58,7 +59,7 @@ class MemoryBridge {
 
       return sessions;
     } catch (err) {
-      console.warn(`[MemoryBridge] Failed to read sessions: ${err.message}`);
+      logger.warn('memory-bridge', 'Failed to read sessions', { error: err.message });
       return [];
     }
   }
@@ -100,7 +101,7 @@ class MemoryBridge {
     try {
       fs.appendFileSync(this.journalPath, JSON.stringify(journalEntry) + '\n');
     } catch (err) {
-      console.error(`[MemoryBridge] Failed to write agent event: ${err.message}`);
+      logger.error('memory-bridge', 'Failed to write agent event', { error: err.message });
       // Non-blocking — do not throw
     }
 

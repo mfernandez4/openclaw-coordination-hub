@@ -1,14 +1,15 @@
 /**
  * Task Dispatcher
- * 
+ *
  * Polls the coordination:tasks queue and routes tasks to typed queues
  * based on the task's `type` field. Unroutable tasks are dead-lettered.
- * 
+ *
  * Routing map: task.type → typed queue name
  * Dead-letter channel: a2a:results:main (with status: 'dead_lettered')
  */
 
 const Redis = require('ioredis');
+const { logger } = require('./logger');
 
 // Known worker queues by task type
 // Workers poll a2a:inbox:{agentId} — so routing must use inbox queues
@@ -82,7 +83,7 @@ class TaskDispatcher {
       timestamp: new Date().toISOString()
     }));
 
-    console.log(`[dispatcher] Dead-lettered task ${task.id}: ${reason}`);
+    logger.warn('dispatcher', `Dead-lettered task ${task.id}`, { taskId: task.id, reason });
   }
 
   /**
@@ -105,14 +106,14 @@ class TaskDispatcher {
     };
 
     await this.client.lpush(typedQueue, JSON.stringify(routed));
-    console.log(`[dispatcher] Routed task ${task.id} (${type}) → ${typedQueue}`);
+    logger.info('dispatcher', `Routed task ${task.id} (${type}) → ${typedQueue}`, { taskId: task.id, type, queue: typedQueue });
   }
 
   /**
    * Poll and route loop
    */
   async run() {
-    console.log('[dispatcher] Starting poll loop (priority order: high → normal → low)');
+    logger.info('dispatcher', 'Starting poll loop (priority order: high → normal → low)');
 
     while (this.running) {
       try {
@@ -128,21 +129,21 @@ class TaskDispatcher {
         try {
           task = JSON.parse(raw);
         } catch (parseErr) {
-          console.error('[dispatcher] Failed to parse task JSON:', parseErr.message);
+          logger.error('dispatcher', 'Failed to parse task JSON', { error: parseErr.message });
           continue;
         }
 
         await this.routeTask(task);
       } catch (err) {
         if (this.running) {
-          console.error('[dispatcher] Poll error:', err.message);
+          logger.error('dispatcher', 'Poll error', { error: err.message });
           // Brief backoff before retrying
           await new Promise(r => setTimeout(r, 1000));
         }
       }
     }
 
-    console.log('[dispatcher] Poll loop stopped');
+    logger.info('dispatcher', 'Poll loop stopped');
   }
 
   /**
@@ -151,8 +152,12 @@ class TaskDispatcher {
   async start() {
     await this.connect();
     this.running = true;
-    this.run(); // fire and forget — runs in background
-    console.log('[dispatcher] Started');
+    this.run().catch(err => {
+      logger.fatal('dispatcher', 'Poll loop crashed', { error: err.message, stack: err.stack });
+      process.exitCode = 1;
+      setTimeout(() => process.exit(1), 100);
+    });
+    logger.info('dispatcher', 'Started');
   }
 
   /**
@@ -162,7 +167,7 @@ class TaskDispatcher {
     this.running = false;
     if (this.client) await this.client.quit();
     if (this.publisher) await this.publisher.quit();
-    console.log('[dispatcher] Stopped');
+    logger.info('dispatcher', 'Stopped');
   }
 }
 

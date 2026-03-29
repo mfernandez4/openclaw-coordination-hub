@@ -35,6 +35,9 @@ jobs:
       - name: Run unit test suite
         run: npm run test:unit
 
+      - name: Security audit
+        run: npm audit --audit-level=high
+
   integration-tests:
     name: Integration Tests (Redis + Node 20)
     runs-on: ubuntu-latest

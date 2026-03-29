@@ -4,6 +4,7 @@
  */
 
 const BaseWorker = require('./base-worker');
+const { logger } = require('../src/logger');
 const fs = require('fs').promises;
 const path = require('path');
 const { execFile } = require('child_process');
@@ -186,7 +187,10 @@ if (require.main === module) {
     process.exit(0);
   });
   
-  worker.start().catch(console.error);
+  worker.start().catch(err => {
+    logger.fatal('coding', 'Worker failed to start', { error: err.message, stack: err.stack });
+    process.exitCode = 1;
+  });
 }
 
 module.exports = CodingWorker;
