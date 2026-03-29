@@ -92,8 +92,9 @@ class RedisPubSub {
         this.reconnectFailures++;
         logger.error('redis-pubsub', `Reconnect failed (${this.reconnectFailures}/${MAX_RECONNECT_FAILURES})`, { role });
         if (this.reconnectFailures >= MAX_RECONNECT_FAILURES) {
-          logger.fatal('redis-pubsub', 'Max reconnect failures reached. Exiting.', { role });
-          process.exit(1);
+          logger.fatal('redis-pubsub', 'Max reconnect failures reached. Exiting.', { role, reconnectFailures: this.reconnectFailures, host: this.host, port: this.port });
+          process.exitCode = 1;
+          setTimeout(() => process.exit(1), 100);
         }
       });
 

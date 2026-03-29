@@ -35,7 +35,7 @@ class BaseWorker extends EventEmitter {
       host: process.env.REDIS_HOST || 'redis',
       port: process.env.REDIS_PORT || 6379
     });
-    logger.info(this.agentId, 'Connected to Redis');
+    logger.info(this.agentId, 'Connecting to Redis');
   }
 
   /**

@@ -181,8 +181,8 @@ if (require.main === module) {
   });
 
   worker.start().catch(err => {
-    logger.fatal('dev-ops', 'Worker failed to start', { error: err.message });
-    process.exit(1);
+    logger.fatal('dev-ops', 'Worker failed to start', { error: err.message, stack: err.stack });
+    process.exitCode = 1;
   });
 }
 

@@ -153,8 +153,9 @@ class TaskDispatcher {
     await this.connect();
     this.running = true;
     this.run().catch(err => {
-      logger.fatal('dispatcher', 'Poll loop crashed', { error: err.message });
-      process.exit(1);
+      logger.fatal('dispatcher', 'Poll loop crashed', { error: err.message, stack: err.stack });
+      process.exitCode = 1;
+      setTimeout(() => process.exit(1), 100);
     });
     logger.info('dispatcher', 'Started');
   }
