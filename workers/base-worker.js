@@ -147,6 +147,18 @@ class BaseWorker extends EventEmitter {
       timestamp: new Date().toISOString()
     };
     await this.redis.publish(this.heartbeatChannel, JSON.stringify(heartbeat));
+
+    // Refresh registry entry and TTL sentinel so stale agents auto-evict.
+    // Without this, lastSeen is frozen at register() time and the TTL sentinel
+    // expires 3×heartbeatInterval after first register, not after last heartbeat.
+    const ttl = Math.floor((this.heartbeatInterval * 3) / 1000);
+    const entry = JSON.stringify({
+      status: heartbeat.status,
+      capabilities: this.getCapabilities(),
+      lastSeen: Date.now()
+    });
+    await this.redis.hset(this.registryKey, this.agentId, entry);
+    await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
   }
 
   /**
