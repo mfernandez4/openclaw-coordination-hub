@@ -164,6 +164,7 @@ describe('BaseWorker', () => {
     });
 
     test('refreshes registry hash entry with fresh lastSeen (issue #24 fix)', async () => {
+      worker.running = true;
       await worker.sendHeartbeat();
       expect(mockRedis.hset).toHaveBeenCalledWith(
         'a2a:registry',
@@ -173,15 +174,27 @@ describe('BaseWorker', () => {
     });
 
     test('renews hash-level EXPIRE on every heartbeat so key never silently expires', async () => {
+      worker.running = true;
       await worker.sendHeartbeat();
       expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', DEFAULT_TTL);
     });
 
     test('renews per-agent TTL sentinel key on every heartbeat (issue #24 fix)', async () => {
+      worker.running = true;
       await worker.sendHeartbeat();
       expect(mockRedis.set).toHaveBeenCalledWith(
         'a2a:registry:test-agent:ttl', '1', 'EX', DEFAULT_TTL
       );
+    });
+
+    test('skips registry writes when running=false (shutdown race guard)', async () => {
+      worker.running = false;
+      await worker.sendHeartbeat();
+      // publish still fires (so the channel gets a final status), but HSET/SET must not
+      expect(mockRedis.publish).toHaveBeenCalled();
+      expect(mockRedis.hset).not.toHaveBeenCalled();
+      expect(mockRedis.expire).not.toHaveBeenCalled();
+      expect(mockRedis.set).not.toHaveBeenCalled();
     });
 
     test('preserves startedAt in registry entry after register()', async () => {

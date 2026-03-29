@@ -36,7 +36,8 @@ async function enqueueTask(task, agent = 'default', priority = 'normal') {
   // If agent specified, put directly in agent's inbox queue
   if (agent && agent !== 'default') {
     const inboxKey = `a2a:inbox:${agent}`;
-    await redis.lpush(inboxKey, JSON.stringify(taskObj));
+    // Workers pop with BLPOP (left pop) — RPUSH gives FIFO; LPUSH would give LIFO
+    await redis.rpush(inboxKey, JSON.stringify(taskObj));
     console.log(`Enqueued to ${inboxKey}: ${taskObj.id}`);
   } else {
     // Push to the appropriate priority queue — dispatcher reads coordination:tasks:{priority}

@@ -149,6 +149,11 @@ class BaseWorker extends EventEmitter {
     };
     await this.redis.publish(this.heartbeatChannel, JSON.stringify(heartbeat));
 
+    // Guard: skip registry writes if shutdown started while this tick was in flight.
+    // Without this, deregister() could HDEL the entry and then the in-flight heartbeat
+    // re-adds it via HSET, making a stopped worker appear live until TTL expiry.
+    if (!this.running) return;
+
     // Refresh registry entry and TTL sentinel so stale agents auto-evict.
     // Without this, lastSeen is frozen at register() time and the TTL sentinel
     // expires 3×heartbeatInterval after first register, not after last heartbeat.
