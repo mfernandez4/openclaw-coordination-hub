@@ -4,6 +4,7 @@
  */
 
 const EventEmitter = require('events');
+const { ArtifactStore } = require('../src/artifact-store');
 
 class BaseWorker extends EventEmitter {
   constructor(agentId, options = {}) {
@@ -13,13 +14,15 @@ class BaseWorker extends EventEmitter {
     this.coordinationChannel = 'a2a:coordination';
     this.heartbeatChannel = 'a2a:heartbeats';
     this.registryKey = 'a2a:registry';
-    
+
     this.redis = options.redis || null;
     this.pollTimeout = options.pollTimeout || 5; // seconds
     this.heartbeatInterval = options.heartbeatInterval || 30000; // ms
     this.running = false;
     this.currentTask = null;
     this.startTime = null;
+
+    this.artifacts = options.artifactStore || new ArtifactStore();
   }
 
   /**
@@ -76,9 +79,15 @@ class BaseWorker extends EventEmitter {
   }
 
   /**
-   * Format result for output
+   * Format result for output.
+   *
+   * @param {object} taskPayload
+   * @param {*} result
+   * @param {string} status
+   * @param {string|null} error
+   * @param {string[]} artifacts - Optional artifact IDs produced by this task
    */
-  formatResult(taskPayload, result, status = 'completed', error = null) {
+  formatResult(taskPayload, result, status = 'completed', error = null, artifacts = []) {
     return {
       type: 'result',
       taskId: taskPayload.taskId || `task:${Date.now()}`,
@@ -86,10 +95,34 @@ class BaseWorker extends EventEmitter {
       task: taskPayload.task,
       status,
       output: result,
+      artifacts,
       error,
       durationMs: this.startTime ? Date.now() - this.startTime : 0,
       timestamp: new Date().toISOString()
     };
+  }
+
+  /**
+   * Write a file to the shared artifact store.
+   * Returns the artifactId for inclusion in task results.
+   *
+   * @param {string} filename
+   * @param {string|Buffer} content
+   * @param {object} metadata
+   * @returns {string} artifactId
+   */
+  writeArtifact(filename, content, metadata = {}) {
+    return this.artifacts.writeArtifact(this.agentId, filename, content, metadata);
+  }
+
+  /**
+   * Read an artifact written by any worker.
+   *
+   * @param {string} artifactId
+   * @returns {{ content: Buffer, manifest: object, filePath: string }}
+   */
+  readArtifact(artifactId) {
+    return this.artifacts.readArtifact(artifactId);
   }
 
   /**
