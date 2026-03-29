@@ -4,6 +4,7 @@
  */
 
 const BaseWorker = require('./base-worker.js');
+const { logger } = require('../src/logger');
 const { execFile } = require('child_process');
 const fs = require('fs');
 
@@ -180,7 +181,7 @@ if (require.main === module) {
   });
 
   worker.start().catch(err => {
-    console.error('Worker failed to start:', err);
+    logger.fatal('dev-ops', 'Worker failed to start', { error: err.message });
     process.exit(1);
   });
 }

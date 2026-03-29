@@ -150,11 +150,13 @@ describe('A2AAdapter', () => {
   });
 
   test('handleMessage() warns and ignores unknown message types', () => {
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     adapter.handleMessage({ type: 'unknown-type', from: 'x', to: 'y', payload: {} });
 
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Unknown message type'));
+    // logger.warn emits JSON via console.log — verify a warn entry was emitted
+    const output = consoleSpy.mock.calls.flat().join('');
+    expect(output).toContain('Unknown message type');
     consoleSpy.mockRestore();
   });
 

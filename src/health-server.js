@@ -5,6 +5,7 @@
  */
 
 const http = require('http');
+const { logger } = require('./logger');
 
 const DEFAULT_PORT = 3001;
 const PORT = parseInt(process.env.HEALTH_PORT) || DEFAULT_PORT;
@@ -58,11 +59,11 @@ class HealthServer {
     this.server = http.createServer((req, res) => this.handleRequest(req, res));
 
     this.server.listen(this.port, () => {
-      console.log(`[health-server] Listening on port ${this.port}`);
+      logger.info('health-server', `Listening on port ${this.port}`, { port: this.port });
     });
 
     this.server.on('error', (err) => {
-      console.error(`[health-server] Error: ${err.message}`);
+      logger.error('health-server', `Error: ${err.message}`, { error: err.message });
     });
   }
 
@@ -72,7 +73,7 @@ class HealthServer {
   stop() {
     if (this.server) {
       this.server.close();
-      console.log('[health-server] Stopped');
+      logger.info('health-server', 'Stopped');
     }
   }
 }

@@ -5,6 +5,7 @@
 
 const { execFile } = require('child_process');
 const BaseWorker = require('./base-worker');
+const { logger } = require('../src/logger');
 
 // Strict branch name validation — alphanumeric, slash, underscore, dot, hyphen only
 const BRANCH_NAME_REGEX = /^[a-zA-Z0-9/_.-]+$/;
@@ -104,7 +105,7 @@ if (require.main === module) {
   });
 
   worker.start().catch(err => {
-    console.error('Worker failed to start:', err);
+    logger.fatal('github-ops', 'Worker failed to start', { error: err.message });
     process.exit(1);
   });
 }

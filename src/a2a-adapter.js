@@ -1,9 +1,9 @@
 /**
  * A2A (Agent-to-Agent) Protocol Adapter
- * 
+ *
  * Provides modality-agnostic agent communication
  * following the A2A specification patterns.
- * 
+ *
  * Features:
  * - Broadcast to all agents (a2a:agents)
  * - Directed handoffs (to specific agent via inbox)
@@ -11,6 +11,7 @@
  * - Agent registry for discovery
  */
 const { RedisPubSub } = require('./redis-pubsub');
+const { logger } = require('./logger');
 
 class A2AAdapter {
   constructor(options = {}) {
@@ -24,13 +25,13 @@ class A2AAdapter {
 
   async initialize(pubsub) {
     this.pubsub = pubsub;
-    
+
     // Subscribe to broadcast channel (all agents)
     await this.pubsub.subscribe('a2a:agents', this.handleBroadcast.bind(this));
-    
+
     // Subscribe to coordination channel (peer negotiation)
     await this.pubsub.subscribe('a2a:coordination', this.handleCoordination.bind(this));
-    
+
     // Subscribe to own inbox for directed messages
     await this.pubsub.subscribe(this.inboxQueue, this.handleInbox.bind(this));
 
@@ -44,22 +45,19 @@ class A2AAdapter {
       status: 'online',
       lastSeen: Date.now()
     });
-    
-    console.log(`[A2A] ${this.agentId} initialized`);
-    console.log(`[A2A] Inbox: ${this.inboxQueue}`);
-    console.log(`[A2A] Broadcast: a2a:agents`);
-    console.log(`[A2A] Coordination: a2a:coordination`);
+
+    logger.info('a2a', `${this.agentId} initialized`, { agentId: this.agentId, inbox: this.inboxQueue });
   }
 
   // ========== Agent Registry ==========
-  
+
   registerAgent(agentId, metadata = {}) {
     this.registry.set(agentId, {
       ...metadata,
       status: 'online',
       lastSeen: Date.now()
     });
-    console.log(`[A2A] Registered: ${agentId}`);
+    logger.info('a2a', `Registered: ${agentId}`, { agentId });
   }
 
   getAgent(agentId) {
@@ -96,7 +94,7 @@ class A2AAdapter {
         }
       }
     } catch (err) {
-      console.error('[A2A] Redis registry sync failed:', err.message);
+      logger.error('a2a', 'Redis registry sync failed', { error: err.message });
     }
   }
 
@@ -112,7 +110,7 @@ class A2AAdapter {
     try {
       await this.pubsub.client.hset(this.registryKey, agentId, JSON.stringify(entry));
     } catch (err) {
-      console.error('[A2A] Redis registry write failed:', err.message);
+      logger.error('a2a', 'Redis registry write failed', { error: err.message });
     }
   }
 
@@ -136,22 +134,22 @@ class A2AAdapter {
   handleInbox(message) {
     // Handle directed messages to our inbox
     if (message.to === this.agentId) {
-      console.log(`[A2A] Direct message from ${message.from}:`, message.type);
+      logger.info('a2a', `Direct message from ${message.from}`, { from: message.from, type: message.type });
       this.handleMessage(message);
     }
   }
 
   handleCoordination(message) {
     // Handle peer negotiation messages
-    console.log(`[A2A] Coordination from ${message.from}:`, message.type);
+    logger.info('a2a', `Coordination from ${message.from}`, { from: message.from, type: message.type });
     this.handleNegotiation(message);
   }
 
   handleMessage(message) {
     const { type, from, to, payload } = message;
-    
+
     if (!this.messageTypes.includes(type)) {
-      console.warn(`[A2A] Unknown message type: ${type}`);
+      logger.warn('a2a', `Unknown message type: ${type}`, { type });
       return;
     }
 
@@ -196,7 +194,7 @@ class A2AAdapter {
     // Publish to target's inbox
     const inboxChannel = `a2a:inbox:${agentId}`;
     await this.pubsub.publish(inboxChannel, message);
-    console.log(`[A2A] Directed to ${agentId}:`, type);
+    logger.info('a2a', `Directed to ${agentId}`, { to: agentId, type });
     return message.id;
   }
 
@@ -213,7 +211,7 @@ class A2AAdapter {
       id: `msg:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`
     };
     await this.pubsub.publish('a2a:agents', message);
-    console.log(`[A2A] Broadcast:`, type);
+    logger.info('a2a', `Broadcast: ${type}`, { type });
     return message.id;
   }
 
@@ -230,7 +228,7 @@ class A2AAdapter {
       id: `msg:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`
     };
     await this.pubsub.publish('a2a:coordination', message);
-    console.log(`[A2A] Coordination:`, type);
+    logger.info('a2a', `Coordination: ${type}`, { type });
     return message.id;
   }
 
@@ -249,15 +247,15 @@ class A2AAdapter {
   // ========== Handlers (override in subclass) ==========
 
   handleTask(from, to, payload) {
-    console.log(`[A2A] Task from ${from}:`, payload);
+    logger.info('a2a', `Task from ${from}`, { from, payload });
   }
 
   handleResult(from, to, payload) {
-    console.log(`[A2A] Result from ${from}:`, payload);
+    logger.info('a2a', `Result from ${from}`, { from, payload });
   }
 
   handleError(from, to, payload) {
-    console.error(`[A2A] Error from ${from}:`, payload);
+    logger.error('a2a', `Error from ${from}`, { from, payload });
   }
 
   handleHeartbeat(from, payload) {
@@ -274,12 +272,12 @@ class A2AAdapter {
   }
 
   handleAck(from, to, payload) {
-    console.log(`[A2A] Ack from ${from}:`, payload);
+    logger.info('a2a', `Ack from ${from}`, { from, payload });
   }
 
   handleNegotiation(message) {
     const { from, payload } = message;
-    console.log(`[A2A] Negotiation from ${from}:`, payload);
+    logger.info('a2a', `Negotiation from ${from}`, { from, payload });
     // Override to implement conflict resolution
   }
 
