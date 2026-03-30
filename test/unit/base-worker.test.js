@@ -54,6 +54,15 @@ describe('BaseWorker', () => {
       );
     });
 
+    test('includes lastSeen in register() entry so syncRegistryFromRedis() never falls back to epoch', async () => {
+      const before = Date.now();
+      await worker.register();
+      const [,, rawEntry] = mockRedis.hset.mock.calls[0];
+      const entry = JSON.parse(rawEntry);
+      expect(typeof entry.lastSeen).toBe('number');
+      expect(entry.lastSeen).toBeGreaterThanOrEqual(before);
+    });
+
     test('sets EXPIRE on registry hash key', async () => {
       await worker.register();
       expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', DEFAULT_TTL);

@@ -48,7 +48,8 @@ class BaseWorker extends EventEmitter {
     const entry = JSON.stringify({
       status: 'online',
       startedAt: this.startedAt,
-      capabilities: this.getCapabilities()
+      capabilities: this.getCapabilities(),
+      lastSeen: Date.now()  // ensures every entry has a valid timestamp from birth
     });
     await this.redis.hset(this.registryKey, this.agentId, entry);
     await this.redis.expire(this.registryKey, ttl); // expire key if all agents vanish
