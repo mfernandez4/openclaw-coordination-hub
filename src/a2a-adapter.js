@@ -21,6 +21,11 @@ class A2AAdapter {
     this.inboxQueue = `a2a:inbox:${this.agentId}`;
     this.registryKey = 'a2a:registry';
     this.registry = new Map(); // agentId -> { status, capabilities, lastSeen }
+    // Threshold used in syncRegistryFromRedis() to prune dead agents.
+    // Default is 3× the default heartbeat interval (30s × 3 = 90s).
+    // Set lower if your workers use a shorter heartbeatInterval so stale
+    // entries are evicted within a reasonable liveness window.
+    this.staleAgentMs = options.staleAgentMs || 90000;
   }
 
   async initialize(pubsub) {
@@ -104,7 +109,7 @@ class A2AAdapter {
             const lastSeenAge = typeof parsed.lastSeen === 'number'
               ? Date.now() - parsed.lastSeen
               : Infinity;
-            if (lastSeenAge > 90000) { // 3× default heartbeat interval
+            if (lastSeenAge > this.staleAgentMs) {
               await this.pubsub.client.hdel(this.registryKey, agentId);
               this.registry.delete(agentId);
               logger.info('a2a', `Pruned stale registry entry for crashed agent`, { agentId });

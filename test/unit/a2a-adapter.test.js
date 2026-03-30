@@ -201,7 +201,11 @@ describe('A2AAdapter', () => {
 // ─── syncRegistryFromRedis() ─────────────────────────────────────────────────
 
 describe('A2AAdapter.syncRegistryFromRedis()', () => {
-  function makeAdapterWithClient(clientOverrides = {}) {
+  // Use a short staleAgentMs so tests don't depend on the 90s default.
+  // This also validates that the threshold is actually configurable.
+  const STALE_MS = 5000;
+
+  function makeAdapterWithClient(clientOverrides = {}, adapterOptions = {}) {
     const mockClient = {
       hgetall: vi.fn().mockResolvedValue(null),
       mget:    vi.fn().mockResolvedValue([]),
@@ -210,7 +214,7 @@ describe('A2AAdapter.syncRegistryFromRedis()', () => {
       ...clientOverrides
     };
     const pubsub = { client: mockClient };
-    const adapter = new A2AAdapter({ agentId: 'hub', pubsub });
+    const adapter = new A2AAdapter({ agentId: 'hub', pubsub, staleAgentMs: STALE_MS, ...adapterOptions });
     return { adapter, mockClient };
   }
 
@@ -247,8 +251,8 @@ describe('A2AAdapter.syncRegistryFromRedis()', () => {
     expect(entry.lastSeen).toBe(0); // must not fall back to Date.now()
   });
 
-  test('prunes entry when sentinel is expired and lastSeen is stale (>90s)', async () => {
-    const staleLastSeen = Date.now() - 120_000; // 2 minutes ago
+  test('prunes entry when sentinel is expired and lastSeen is stale (>staleAgentMs)', async () => {
+    const staleLastSeen = Date.now() - (STALE_MS + 5000); // well beyond the threshold
     const { adapter, mockClient } = makeAdapterWithClient({
       hgetall: vi.fn().mockResolvedValue({
         'crashed-worker': JSON.stringify({ status: 'online', lastSeen: staleLastSeen, capabilities: [] })
@@ -260,8 +264,8 @@ describe('A2AAdapter.syncRegistryFromRedis()', () => {
     expect(adapter.getAgent('crashed-worker')).toBeUndefined();
   });
 
-  test('does NOT prune entry when sentinel expired but lastSeen is recent (<90s)', async () => {
-    const recentLastSeen = Date.now() - 30_000; // 30s ago — within grace window
+  test('does NOT prune entry when sentinel expired but lastSeen is recent (<staleAgentMs)', async () => {
+    const recentLastSeen = Date.now() - 1000; // 1s ago — within the 5s threshold
     const { adapter, mockClient } = makeAdapterWithClient({
       hgetall: vi.fn().mockResolvedValue({
         'slow-worker': JSON.stringify({ status: 'online', lastSeen: recentLastSeen, capabilities: [] })
@@ -274,7 +278,7 @@ describe('A2AAdapter.syncRegistryFromRedis()', () => {
   });
 
   test('never prunes self (hub has no sentinel)', async () => {
-    const staleLastSeen = Date.now() - 120_000;
+    const staleLastSeen = Date.now() - (STALE_MS + 5000);
     const { adapter, mockClient } = makeAdapterWithClient({
       hgetall: vi.fn().mockResolvedValue({
         'hub': JSON.stringify({ status: 'online', lastSeen: staleLastSeen, capabilities: [] })
