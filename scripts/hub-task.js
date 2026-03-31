@@ -15,7 +15,7 @@ const Redis = require('ioredis');
 const COORDINATION_BASE = 'coordination:tasks';
 const VALID_PRIORITIES = ['high', 'normal', 'low'];
 
-async function enqueueTask(task, agent = 'default', priority = 'normal') {
+async function enqueueTask(task, agent = 'default', priority = 'normal', taskType = undefined) {
   const redis = new Redis({
     host: process.env.REDIS_HOST || 'redis',
     port: process.env.REDIS_PORT || 6379
@@ -26,7 +26,11 @@ async function enqueueTask(task, agent = 'default', priority = 'normal') {
   const taskObj = {
     id: `task:${Date.now()}:${Math.random().toString(36).substr(2, 9)}`,
     task,
-    type: agent !== 'default' ? agent : task.split(' ')[0], // best-effort type hint
+    // When routing via dispatcher (default agent), type must match TYPE_TO_QUEUE keys
+    // (coding | github-ops | research | dev-ops). task.split(' ')[0] produces invalid
+    // values that get dead-lettered. Require an explicit --type flag instead; omit the
+    // field so the dispatcher falls back to task.task for routing.
+    type: agent !== 'default' ? agent : taskType,
     agent,
     priority: normalizedPriority,
     createdAt: new Date().toISOString(),
@@ -87,13 +91,15 @@ if (args.includes('--status')) {
   const agent = agentIdx > -1 ? args[agentIdx + 1] : 'default';
   const priorityIdx = args.indexOf('--priority');
   const priority = priorityIdx > -1 ? args[priorityIdx + 1] : 'normal';
+  const typeIdx = args.indexOf('--type');
+  const taskType = typeIdx > -1 ? args[typeIdx + 1] : undefined;
 
   if (!task) {
-    console.error('Usage: node hub-task.js --task "do something" [--agent coding] [--priority high|normal|low]');
+    console.error('Usage: node hub-task.js --task "do something" [--agent coding] [--priority high|normal|low] [--type coding]');
     process.exit(1);
   }
 
-  enqueueTask(task, agent, priority).then(id => {
+  enqueueTask(task, agent, priority, taskType).then(id => {
     console.log(`Enqueued: ${id}`);
     process.exit(0);
   });
@@ -101,12 +107,14 @@ if (args.includes('--status')) {
   console.log('Hub Task Helper');
   console.log('');
   console.log('Usage:');
-  console.log('  node hub-task.js --task "do something"                 # normal priority');
-  console.log('  node hub-task.js --task "do" --priority high           # high priority');
-  console.log('  node hub-task.js --task "do" --agent coding            # direct to agent inbox');
-  console.log('  node hub-task.js -t "do something"                     # shorthand');
-  console.log('  node hub-task.js --status                              # check queue lengths');
+  console.log('  node hub-task.js --task "do something"                          # normal priority (no routing type)');
+  console.log('  node hub-task.js --task "list-files" --type coding              # route via dispatcher to coding worker');
+  console.log('  node hub-task.js --task "do" --priority high --type research    # high priority, research worker');
+  console.log('  node hub-task.js --task "do" --agent coding                     # direct to coding inbox (bypasses dispatcher)');
+  console.log('  node hub-task.js -t "do something"                              # shorthand');
+  console.log('  node hub-task.js --status                                       # check queue lengths');
   console.log('');
   console.log('Priorities: high | normal (default) | low');
-  console.log('Agents:     coding | research | github-ops | dev-ops');
+  console.log('Types:      coding | research | github-ops | dev-ops  (required for dispatcher routing)');
+  console.log('Agents:     coding | research | github-ops | dev-ops  (bypasses dispatcher, direct inbox)');
 }

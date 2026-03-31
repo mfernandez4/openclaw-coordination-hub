@@ -182,10 +182,12 @@ describe('BaseWorker', () => {
       );
     });
 
-    test('renews hash-level EXPIRE on every heartbeat so key never silently expires', async () => {
+    test('renews hash-level EXPIRE with a fixed large TTL to prevent fast workers shrinking it', async () => {
       worker.running = true;
       await worker.sendHeartbeat();
-      expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', DEFAULT_TTL);
+      // Must use a fixed constant (3600), not the per-worker TTL, so a short-interval
+      // worker cannot shrink the shared hash key below a slow worker's heartbeat period.
+      expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', 3600);
     });
 
     test('renews per-agent TTL sentinel key on every heartbeat (issue #24 fix)', async () => {
@@ -208,9 +210,11 @@ describe('BaseWorker', () => {
 
     test('preserves startedAt in registry entry after register()', async () => {
       await worker.register();
+      worker.running = true; // required: guard skips HSET when running=false
       await worker.sendHeartbeat();
       const hsetCalls = mockRedis.hset.mock.calls;
       // Second HSET is the heartbeat one
+      expect(hsetCalls.length).toBeGreaterThanOrEqual(2);
       const heartbeatEntry = JSON.parse(hsetCalls[hsetCalls.length - 1][2]);
       expect(heartbeatEntry.startedAt).toBeDefined();
       expect(heartbeatEntry.startedAt).toBe(worker.startedAt);

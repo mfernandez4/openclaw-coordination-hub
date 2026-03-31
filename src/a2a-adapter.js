@@ -25,7 +25,7 @@ class A2AAdapter {
     // Default is 3× the default heartbeat interval (30s × 3 = 90s).
     // Set lower if your workers use a shorter heartbeatInterval so stale
     // entries are evicted within a reasonable liveness window.
-    this.staleAgentMs = options.staleAgentMs || 90000;
+    this.staleAgentMs = options.staleAgentMs ?? 90000;
   }
 
   async initialize(pubsub) {

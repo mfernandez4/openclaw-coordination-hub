@@ -7,6 +7,14 @@ const EventEmitter = require('events');
 const { ArtifactStore } = require('../src/artifact-store');
 const { logger } = require('../src/logger');
 
+// Fixed TTL for the shared a2a:registry hash key.
+// Per-worker heartbeat TTLs differ; using them here lets a fast worker
+// (e.g. 10s interval → 30s TTL) continuously shrink the shared hash TTL
+// below a slow worker's heartbeat period, expiring all entries prematurely.
+// Per-agent sentinel keys (a2a:registry:<id>:ttl) handle individual liveness.
+// This constant is only a safety net for "all workers vanish without deregistering".
+const REGISTRY_HASH_TTL = 3600; // 1 hour
+
 class BaseWorker extends EventEmitter {
   constructor(agentId, options = {}) {
     super();
@@ -166,7 +174,11 @@ class BaseWorker extends EventEmitter {
       startedAt: this.startedAt  // preserved from register() — not dropped on heartbeat
     });
     await this.redis.hset(this.registryKey, this.agentId, entry);
-    await this.redis.expire(this.registryKey, ttl); // renew hash TTL so key doesn't expire mid-flight
+    if (!this.running) return; // guard: stop() may have flipped running while HSET was in flight
+    // Use a fixed large TTL for the shared hash so a fast worker (short heartbeatInterval)
+    // cannot shrink the key's TTL below a slow worker's heartbeat period.
+    await this.redis.expire(this.registryKey, REGISTRY_HASH_TTL);
+    if (!this.running) return; // guard: stop() may have flipped running while EXPIRE was in flight
     await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
   }
 
