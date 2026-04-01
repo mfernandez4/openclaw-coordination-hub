@@ -63,9 +63,9 @@ describe('BaseWorker', () => {
       expect(entry.lastSeen).toBeGreaterThanOrEqual(before);
     });
 
-    test('sets EXPIRE on registry hash key', async () => {
+    test('sets EXPIRE on registry hash key using fixed large TTL (not per-worker TTL)', async () => {
       await worker.register();
-      expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', DEFAULT_TTL);
+      expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', 3600);
     });
 
     test('sets per-agent TTL sentinel key', async () => {
@@ -82,7 +82,9 @@ describe('BaseWorker', () => {
         heartbeatInterval: 10000 // 10s → TTL = 30s
       });
       await customWorker.register();
-      expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', 30);
+      // Hash EXPIRE always uses fixed large TTL regardless of heartbeatInterval
+      expect(mockRedis.expire).toHaveBeenCalledWith('a2a:registry', 3600);
+      // Per-agent sentinel key still uses the heartbeat-derived TTL
       expect(mockRedis.set).toHaveBeenCalledWith('a2a:registry:agent-x:ttl', '1', 'EX', 30);
     });
   });

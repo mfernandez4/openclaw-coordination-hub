@@ -46,6 +46,9 @@ async function enqueueTask(task, agent = 'default', priority = 'normal', taskTyp
   } else {
     // Push to the appropriate priority queue — dispatcher reads coordination:tasks:{priority}
     const queueKey = `${COORDINATION_BASE}:${normalizedPriority}`;
+    if (!taskType) {
+      console.warn(`Warning: no --type provided; task will be dead-lettered unless task.task exactly matches a routing key (coding|github-ops|research|dev-ops).`);
+    }
     await redis.lpush(queueKey, JSON.stringify(taskObj));
     console.log(`Enqueued to ${queueKey}: ${taskObj.id}`);
   }

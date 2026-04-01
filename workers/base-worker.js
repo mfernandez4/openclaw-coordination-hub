@@ -60,7 +60,7 @@ class BaseWorker extends EventEmitter {
       lastSeen: Date.now()  // ensures every entry has a valid timestamp from birth
     });
     await this.redis.hset(this.registryKey, this.agentId, entry);
-    await this.redis.expire(this.registryKey, ttl); // expire key if all agents vanish
+    await this.redis.expire(this.registryKey, REGISTRY_HASH_TTL); // safety net TTL — see constant comment above
     // Also set TTL on the specific field via a separate TTL key
     await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
     logger.info(this.agentId, `Registered as online (TTL: ${ttl}s)`, { ttl });
