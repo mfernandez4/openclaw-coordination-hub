@@ -21,6 +21,11 @@ class A2AAdapter {
     this.inboxQueue = `a2a:inbox:${this.agentId}`;
     this.registryKey = 'a2a:registry';
     this.registry = new Map(); // agentId -> { status, capabilities, lastSeen }
+    // Threshold used in syncRegistryFromRedis() to prune dead agents.
+    // Default is 3× the default heartbeat interval (30s × 3 = 90s).
+    // Set lower if your workers use a shorter heartbeatInterval so stale
+    // entries are evicted within a reasonable liveness window.
+    this.staleAgentMs = options.staleAgentMs ?? 90000;
   }
 
   async initialize(pubsub) {
@@ -80,14 +85,45 @@ class A2AAdapter {
       const entries = await this.pubsub.client.hgetall(this.registryKey);
       if (!entries) return;
 
+      const agentIds = Object.keys(entries);
+
+      // Batch-check all per-agent TTL sentinel keys in one round-trip.
+      // Sentinels are written by BaseWorker.register() / sendHeartbeat() and expire
+      // at 3× heartbeat interval. A missing sentinel means the agent stopped
+      // heartbeating (crashed or clean stop without deregister()).
+      const sentinelKeys = agentIds.map(id => `${this.registryKey}:${id}:ttl`);
+      const sentinelValues = sentinelKeys.length > 0
+        ? await this.pubsub.client.mget(...sentinelKeys)
+        : [];
+      const liveAgents = new Set(agentIds.filter((_, i) => sentinelValues[i] !== null));
+
       for (const [agentId, raw] of Object.entries(entries)) {
         try {
           const parsed = JSON.parse(raw);
+
+          // Prune entries whose sentinel has expired and whose lastSeen is stale.
+          // Skip self — the hub has no sentinel and should never prune itself.
+          // The lastSeen guard prevents false-pruning non-BaseWorker agents (e.g.
+          // external registrations) that don't use the sentinel pattern.
+          if (agentId !== this.agentId && !liveAgents.has(agentId)) {
+            const lastSeenAge = typeof parsed.lastSeen === 'number'
+              ? Date.now() - parsed.lastSeen
+              : Infinity;
+            if (lastSeenAge > this.staleAgentMs) {
+              await this.pubsub.client.hdel(this.registryKey, agentId);
+              this.registry.delete(agentId);
+              logger.info('a2a', `Pruned stale registry entry for crashed agent`, { agentId });
+              continue;
+            }
+          }
+
           this.registry.set(agentId, {
             ...(this.registry.get(agentId) || {}),
             ...parsed,
             status: parsed.status || 'online',
-            lastSeen: typeof parsed.lastSeen === 'number' ? parsed.lastSeen : Date.now()
+            // Use 0 (epoch) as fallback — not Date.now() — so entries without a
+            // lastSeen field are treated as stale, not as just-seen.
+            lastSeen: typeof parsed.lastSeen === 'number' ? parsed.lastSeen : 0
           });
         } catch {
           // ignore malformed rows

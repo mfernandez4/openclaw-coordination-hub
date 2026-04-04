@@ -197,3 +197,96 @@ describe('A2AAdapter', () => {
     expect(status.registeredAgents).toBe(2);
   });
 });
+
+// ─── syncRegistryFromRedis() ─────────────────────────────────────────────────
+
+describe('A2AAdapter.syncRegistryFromRedis()', () => {
+  // Use a short staleAgentMs so tests don't depend on the 90s default.
+  // This also validates that the threshold is actually configurable.
+  const STALE_MS = 5000;
+
+  function makeAdapterWithClient(clientOverrides = {}, adapterOptions = {}) {
+    const mockClient = {
+      hgetall: vi.fn().mockResolvedValue(null),
+      mget:    vi.fn().mockResolvedValue([]),
+      hdel:    vi.fn().mockResolvedValue(1),
+      hset:    vi.fn().mockResolvedValue(1),
+      ...clientOverrides
+    };
+    const pubsub = { client: mockClient };
+    const adapter = new A2AAdapter({ agentId: 'hub', pubsub, staleAgentMs: STALE_MS, ...adapterOptions });
+    return { adapter, mockClient };
+  }
+
+  test('does nothing when hgetall returns null (empty registry)', async () => {
+    const { adapter, mockClient } = makeAdapterWithClient({
+      hgetall: vi.fn().mockResolvedValue(null)
+    });
+    await adapter.syncRegistryFromRedis();
+    expect(adapter.getAllAgents()).toHaveLength(0);
+    expect(mockClient.hdel).not.toHaveBeenCalled();
+  });
+
+  test('populates in-memory registry from Redis entries with live sentinels', async () => {
+    const { adapter, mockClient } = makeAdapterWithClient({
+      hgetall: vi.fn().mockResolvedValue({
+        'worker-a': JSON.stringify({ status: 'online', lastSeen: Date.now(), capabilities: [] })
+      }),
+      mget: vi.fn().mockResolvedValue(['1']) // sentinel exists
+    });
+    await adapter.syncRegistryFromRedis();
+    expect(adapter.getAgent('worker-a')).toBeDefined();
+    expect(mockClient.hdel).not.toHaveBeenCalled();
+  });
+
+  test('uses lastSeen=0 fallback (not Date.now()) for entries missing lastSeen', async () => {
+    const { adapter, mockClient } = makeAdapterWithClient({
+      hgetall: vi.fn().mockResolvedValue({
+        'worker-a': JSON.stringify({ status: 'online', capabilities: [] }) // no lastSeen
+      }),
+      mget: vi.fn().mockResolvedValue(['1']) // sentinel exists — don't prune
+    });
+    await adapter.syncRegistryFromRedis();
+    const entry = adapter.getAgent('worker-a');
+    expect(entry.lastSeen).toBe(0); // must not fall back to Date.now()
+  });
+
+  test('prunes entry when sentinel is expired and lastSeen is stale (>staleAgentMs)', async () => {
+    const staleLastSeen = Date.now() - (STALE_MS + 5000); // well beyond the threshold
+    const { adapter, mockClient } = makeAdapterWithClient({
+      hgetall: vi.fn().mockResolvedValue({
+        'crashed-worker': JSON.stringify({ status: 'online', lastSeen: staleLastSeen, capabilities: [] })
+      }),
+      mget: vi.fn().mockResolvedValue([null]) // sentinel expired
+    });
+    await adapter.syncRegistryFromRedis();
+    expect(mockClient.hdel).toHaveBeenCalledWith('a2a:registry', 'crashed-worker');
+    expect(adapter.getAgent('crashed-worker')).toBeUndefined();
+  });
+
+  test('does NOT prune entry when sentinel expired but lastSeen is recent (<staleAgentMs)', async () => {
+    const recentLastSeen = Date.now() - 1000; // 1s ago — within the 5s threshold
+    const { adapter, mockClient } = makeAdapterWithClient({
+      hgetall: vi.fn().mockResolvedValue({
+        'slow-worker': JSON.stringify({ status: 'online', lastSeen: recentLastSeen, capabilities: [] })
+      }),
+      mget: vi.fn().mockResolvedValue([null]) // sentinel expired but lastSeen is fresh
+    });
+    await adapter.syncRegistryFromRedis();
+    expect(mockClient.hdel).not.toHaveBeenCalled();
+    expect(adapter.getAgent('slow-worker')).toBeDefined();
+  });
+
+  test('never prunes self (hub has no sentinel)', async () => {
+    const staleLastSeen = Date.now() - (STALE_MS + 5000);
+    const { adapter, mockClient } = makeAdapterWithClient({
+      hgetall: vi.fn().mockResolvedValue({
+        'hub': JSON.stringify({ status: 'online', lastSeen: staleLastSeen, capabilities: [] })
+      }),
+      mget: vi.fn().mockResolvedValue([null]) // no sentinel for hub
+    });
+    await adapter.syncRegistryFromRedis();
+    expect(mockClient.hdel).not.toHaveBeenCalled(); // must not prune self
+    expect(adapter.getAgent('hub')).toBeDefined();
+  });
+});

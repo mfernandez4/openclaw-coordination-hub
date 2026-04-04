@@ -7,6 +7,14 @@ const EventEmitter = require('events');
 const { ArtifactStore } = require('../src/artifact-store');
 const { logger } = require('../src/logger');
 
+// Fixed TTL for the shared a2a:registry hash key.
+// Per-worker heartbeat TTLs differ; using them here lets a fast worker
+// (e.g. 10s interval → 30s TTL) continuously shrink the shared hash TTL
+// below a slow worker's heartbeat period, expiring all entries prematurely.
+// Per-agent sentinel keys (a2a:registry:<id>:ttl) handle individual liveness.
+// This constant is only a safety net for "all workers vanish without deregistering".
+const REGISTRY_HASH_TTL = 3600; // 1 hour
+
 class BaseWorker extends EventEmitter {
   constructor(agentId, options = {}) {
     super();
@@ -44,13 +52,15 @@ class BaseWorker extends EventEmitter {
    */
   async register() {
     const ttl = Math.floor((this.heartbeatInterval * 3) / 1000); // seconds
+    this.startedAt = new Date().toISOString(); // preserved in every heartbeat HSET
     const entry = JSON.stringify({
       status: 'online',
-      startedAt: new Date().toISOString(),
-      capabilities: this.getCapabilities()
+      startedAt: this.startedAt,
+      capabilities: this.getCapabilities(),
+      lastSeen: Date.now()  // ensures every entry has a valid timestamp from birth
     });
     await this.redis.hset(this.registryKey, this.agentId, entry);
-    await this.redis.expire(this.registryKey, ttl); // expire key if all agents vanish
+    await this.redis.expire(this.registryKey, REGISTRY_HASH_TTL); // safety net TTL — see constant comment above
     // Also set TTL on the specific field via a separate TTL key
     await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
     logger.info(this.agentId, `Registered as online (TTL: ${ttl}s)`, { ttl });
@@ -147,6 +157,29 @@ class BaseWorker extends EventEmitter {
       timestamp: new Date().toISOString()
     };
     await this.redis.publish(this.heartbeatChannel, JSON.stringify(heartbeat));
+
+    // Guard: skip registry writes if shutdown started while this tick was in flight.
+    // Without this, deregister() could HDEL the entry and then the in-flight heartbeat
+    // re-adds it via HSET, making a stopped worker appear live until TTL expiry.
+    if (!this.running) return;
+
+    // Refresh registry entry and TTL sentinel so stale agents auto-evict.
+    // Without this, lastSeen is frozen at register() time and the TTL sentinel
+    // expires 3×heartbeatInterval after first register, not after last heartbeat.
+    const ttl = Math.floor((this.heartbeatInterval * 3) / 1000);
+    const entry = JSON.stringify({
+      status: heartbeat.status,
+      capabilities: this.getCapabilities(),
+      lastSeen: Date.now(),
+      startedAt: this.startedAt  // preserved from register() — not dropped on heartbeat
+    });
+    await this.redis.hset(this.registryKey, this.agentId, entry);
+    if (!this.running) return; // guard: stop() may have flipped running while HSET was in flight
+    // Use a fixed large TTL for the shared hash so a fast worker (short heartbeatInterval)
+    // cannot shrink the key's TTL below a slow worker's heartbeat period.
+    await this.redis.expire(this.registryKey, REGISTRY_HASH_TTL);
+    if (!this.running) return; // guard: stop() may have flipped running while EXPIRE was in flight
+    await this.redis.set(`${this.registryKey}:${this.agentId}:ttl`, '1', 'EX', ttl);
   }
 
   /**
