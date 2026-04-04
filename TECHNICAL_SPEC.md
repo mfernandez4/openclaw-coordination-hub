@@ -129,11 +129,16 @@ subscribe('a2a:coordination', callback)
 
 ### 4.2 Queue Operations
 
-**Implementation note:** Priority queues (`tasks:queue:<priority>`) are documented in the spec but not yet implemented. The current implementation uses a single `coordination:tasks` queue with `LPUSH`/`BRPOP`. Priority queue support is tracked as a backlog item.
+Three priority queues are polled in order by `TaskDispatcher` (high → normal → low):
 
-- `LPUSH coordination:tasks <task-json>` — Enqueue (via `taskQueue.enqueue()`)
-- `BRPOP coordination:tasks <timeout>` — Dequeue (via `TaskDispatcher`)
-- `LPUSH tasks:<type> <task-json>` — Typed queue per worker type (coded, github-ops, research, dev-ops)
+| Key | Priority | LPUSH command |
+|-----|----------|---------------|
+| `coordination:tasks:high` | High | `LPUSH coordination:tasks:high <task-json>` |
+| `coordination:tasks:normal` | Normal (default) | `LPUSH coordination:tasks:normal <task-json>` |
+| `coordination:tasks:low` | Low | `LPUSH coordination:tasks:low <task-json>` |
+
+- Enqueue via `scripts/hub-task.js --priority high|normal|low` or `src/task-queue.js`
+- Dequeue via `BRPOP coordination:tasks:{high,normal,low} <timeout>` (dispatcher polls in priority order)
 
 **Dead-letter queue:** Tasks with unknown types are routed to `coordination:tasks:dlq` and a dead-letter result is published to `a2a:results:main`.
 

@@ -53,7 +53,7 @@ Provide real-time communication and coordination for OpenClaw's sub-agent ecosys
 | `a2a:results:main` | Pub/Sub | Processed results (ResultProcessor output) |
 | `a2a:heartbeats` | Pub/Sub | Worker heartbeat pub/sub |
 | `a2a:registry` | Hash | Persisted agent registry |
-| `coordination:tasks` | List | Task enqueue queue (dispatcher polls) |
+| `coordination:tasks:{high,normal,low}` | List | Priority task queues (dispatcher polls high → normal → low) |
 | `coordination:tasks:dlq` | List | Dead-letter queue for unroutable tasks |
 
 ### 2. Task Queue
