@@ -139,4 +139,100 @@ describe('RedisPubSub lifecycle behavior', () => {
     vi.useRealTimers();
     exitSpy.mockRestore();
   });
+
+  // ─── event: error ─────────────────────────────────────────────────────────
+
+  test('error event sets status to "error"', async () => {
+    const { FakeRedis, clients } = createFakeRedisFactory();
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis });
+
+    const connectPromise = pubsub.connect();
+    await waitForClients(clients, 2);
+    clients.forEach(c => { c.emit('connect'); c.emit('ready'); });
+    await connectPromise;
+
+    expect(pubsub.status).toBe('connected');
+    clients[0].emit('error', new Error('redis gone'));
+    expect(pubsub.status).toBe('error');
+  });
+
+  // ─── event: close ─────────────────────────────────────────────────────────
+
+  test('close event sets status to "disconnected" when not shutting down', async () => {
+    const { FakeRedis, clients } = createFakeRedisFactory();
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis });
+
+    const connectPromise = pubsub.connect();
+    await waitForClients(clients, 2);
+    clients.forEach(c => { c.emit('connect'); c.emit('ready'); });
+    await connectPromise;
+
+    clients[0].emit('close');
+    expect(pubsub.status).toBe('disconnected');
+  });
+
+  test('close event sets status to "disconnected" even during intentional shutdown', async () => {
+    const { FakeRedis, clients } = createFakeRedisFactory();
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis });
+
+    const connectPromise = pubsub.connect();
+    await waitForClients(clients, 2);
+    clients.forEach(c => { c.emit('connect'); c.emit('ready'); });
+    await connectPromise;
+
+    pubsub.shuttingDown = true;
+    clients[0].emit('close');
+    expect(pubsub.status).toBe('disconnected');
+  });
+
+  // ─── event: reconnecting ──────────────────────────────────────────────────
+
+  test('reconnecting event logs when not shutting down', async () => {
+    const { FakeRedis, clients } = createFakeRedisFactory();
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis });
+
+    const connectPromise = pubsub.connect();
+    await waitForClients(clients, 2);
+    clients.forEach(c => { c.emit('connect'); c.emit('ready'); });
+    await connectPromise;
+
+    // Should not throw — coverage hit for the logger.info path
+    expect(() => clients[0].emit('reconnecting')).not.toThrow();
+  });
+
+  test('reconnecting event is silent during intentional shutdown', async () => {
+    const { FakeRedis, clients } = createFakeRedisFactory();
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis });
+
+    const connectPromise = pubsub.connect();
+    await waitForClients(clients, 2);
+    clients.forEach(c => { c.emit('connect'); c.emit('ready'); });
+    await connectPromise;
+
+    pubsub.shuttingDown = true;
+    expect(() => clients[0].emit('reconnecting')).not.toThrow();
+  });
+
+  // ─── getStatus() ──────────────────────────────────────────────────────────
+
+  test('getStatus() returns current status string', async () => {
+    const { FakeRedis, clients } = createFakeRedisFactory();
+    const pubsub = new RedisPubSub({ redisClientClass: FakeRedis });
+
+    expect(pubsub.getStatus()).toBe('disconnected');
+
+    const connectPromise = pubsub.connect();
+    await waitForClients(clients, 2);
+    clients.forEach(c => { c.emit('connect'); c.emit('ready'); });
+    await connectPromise;
+
+    expect(pubsub.getStatus()).toBe('connected');
+  });
+
+  // ─── constructor guard ────────────────────────────────────────────────────
+
+  test('constructor throws when redisClientClass is not a function', () => {
+    expect(() => new RedisPubSub({ redisClientClass: 'not-a-fn' }))
+      .toThrow('options.redisClientClass must be a constructor function');
+  });
 });

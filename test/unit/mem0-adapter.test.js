@@ -170,4 +170,68 @@ describe('Mem0Adapter', () => {
     await adapter.addMemory('log this', { agentId: 'hub' });
     expect(bridge.recordAgentEvent).toHaveBeenCalledWith('hub', 'memory', { content: 'log this' });
   });
+
+  // ── Happy paths when Mem0 is enabled and reachable ─────────────────────────
+
+  test('initialize() returns true when health check succeeds', async () => {
+    const adapter = new Mem0Adapter({
+      enabled: true, apiKey: 'key', baseUrl: 'http://mem0.local',
+      fallbackBridge: makeStubBridge()
+    });
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true });
+    const result = await adapter.initialize();
+
+    expect(result).toBe(true);
+    expect(adapter.isEnabled()).toBe(true);
+    global.fetch = undefined;
+  });
+
+  test('search() returns results from Mem0 when enabled and fetch succeeds', async () => {
+    const adapter = new Mem0Adapter({
+      enabled: true, apiKey: 'key', baseUrl: 'http://mem0.local',
+      fallbackBridge: makeStubBridge()
+    });
+    adapter.enabled = true;
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ results: [{ memory: 'past event' }] })
+    });
+
+    const results = await adapter.search('query', { userId: 'u1', agentId: 'a1', limit: 5 });
+    expect(results).toEqual([{ memory: 'past event' }]);
+    global.fetch = undefined;
+  });
+
+  test('search() returns empty array when Mem0 response has no results field', async () => {
+    const adapter = new Mem0Adapter({
+      enabled: true, apiKey: 'key', baseUrl: 'http://mem0.local',
+      fallbackBridge: makeStubBridge()
+    });
+    adapter.enabled = true;
+
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+
+    const results = await adapter.search('query');
+    expect(results).toEqual([]);
+    global.fetch = undefined;
+  });
+
+  test('addMemory() returns Mem0 response when enabled and fetch succeeds', async () => {
+    const adapter = new Mem0Adapter({
+      enabled: true, apiKey: 'key', baseUrl: 'http://mem0.local',
+      fallbackBridge: makeStubBridge()
+    });
+    adapter.enabled = true;
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'mem-123', status: 'created' })
+    });
+
+    const result = await adapter.addMemory('learned something', { agentId: 'hub', userId: 'u1' });
+    expect(result.id).toBe('mem-123');
+    global.fetch = undefined;
+  });
 });
