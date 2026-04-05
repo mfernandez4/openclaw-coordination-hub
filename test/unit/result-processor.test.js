@@ -317,3 +317,147 @@ describe('ResultProcessor', () => {
     expect(processor.running).toBe(false);
   });
 });
+
+// ─── formatResult() formatter variants ──────────────────────────────────────
+
+describe('ResultProcessor.formatResult()', () => {
+  let processor;
+  beforeEach(() => {
+    processor = new ResultProcessor();
+  });
+
+  const baseResult = {
+    agent: 'coder', task: 'build', status: 'completed',
+    output: { lines: 42 }, durationMs: 200
+  };
+
+  test('"json" formatter returns pretty-printed JSON string', () => {
+    const out = processor.formatResult(baseResult, 'json');
+    const parsed = JSON.parse(out);
+    expect(parsed.agent).toBe('coder');
+  });
+
+  test('"compact" formatter returns a one-line string', () => {
+    const out = processor.formatResult(baseResult, 'compact');
+    expect(out).not.toContain('\n');
+    expect(out).toContain('✅');
+  });
+
+  test('unknown formatter falls back to markdown', () => {
+    const out = processor.formatResult(baseResult, 'nonexistent');
+    expect(out).toContain('**Status:**');
+  });
+
+  test('custom formatter in config.formatters is applied via formatCustom()', () => {
+    processor.config.formatters['my-fmt'] = '{agent} did {task} with status {status}';
+    const out = processor.formatResult(baseResult, 'my-fmt');
+    expect(out).toBe('coder did build with status completed');
+  });
+});
+
+// ─── formatCustom() ──────────────────────────────────────────────────────────
+
+describe('ResultProcessor.formatCustom()', () => {
+  let processor;
+  beforeEach(() => { processor = new ResultProcessor(); });
+
+  test('replaces all template placeholders', () => {
+    const template = 'agent={agent} task={task} status={status} output={output} error={error} duration={duration}';
+    const result = { agent: 'a', task: 't', status: 'completed', output: { x: 1 }, error: null, durationMs: 500 };
+    const out = processor.formatCustom(result, template);
+    expect(out).toContain('agent=a');
+    expect(out).toContain('task=t');
+    expect(out).toContain('status=completed');
+    expect(out).toContain('duration=500');
+  });
+
+  test('uses empty string for missing error field', () => {
+    const template = 'err={error}';
+    const out = processor.formatCustom({ agent: 'a', task: 't', status: 'ok', output: null }, template);
+    expect(out).toBe('err=');
+  });
+});
+
+// ─── loadConfig() error branch ───────────────────────────────────────────────
+
+describe('ResultProcessor.loadConfig()', () => {
+  test('falls back to defaultConfig when config file contains invalid JSON', () => {
+    const fs   = require('fs');
+    const os   = require('os');
+    const path = require('path');
+
+    const tmpDir     = fs.mkdtempSync(path.join(os.tmpdir(), 'rp-config-test-'));
+    const configPath = path.join(tmpDir, 'bad-policies.json');
+    fs.writeFileSync(configPath, 'not-valid-json{{{');
+
+    try {
+      const p = new ResultProcessor({ configPath });
+      // Should not throw; falls back to defaults
+      expect(p.config.policies.auditLog).toBe(true);
+      expect(p.config.defaultFormatter).toBe('markdown');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('merges user config file over defaults when file is valid', () => {
+    const fs   = require('fs');
+    const os   = require('os');
+    const path = require('path');
+
+    const tmpDir     = fs.mkdtempSync(path.join(os.tmpdir(), 'rp-config-valid-'));
+    const configPath = path.join(tmpDir, 'policies.json');
+    fs.writeFileSync(configPath, JSON.stringify({ defaultFormatter: 'compact' }));
+
+    try {
+      const p = new ResultProcessor({ configPath });
+      expect(p.config.defaultFormatter).toBe('compact');
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ─── reloadConfig() ──────────────────────────────────────────────────────────
+
+describe('ResultProcessor.reloadConfig()', () => {
+  test('re-reads config without throwing', () => {
+    const processor = new ResultProcessor();
+    expect(() => processor.reloadConfig()).not.toThrow();
+  });
+
+  test('updates config in place', () => {
+    const processor = new ResultProcessor();
+    processor.config.defaultFormatter = 'compact';
+    processor.reloadConfig();
+    // After reload from the real config file, formatter should be 'markdown'
+    expect(processor.config.defaultFormatter).toBe('markdown');
+  });
+});
+
+// ─── applyFilters() custom filter duration block ─────────────────────────────
+
+describe('ResultProcessor.applyFilters() custom filter', () => {
+  test('blocks result when custom filter maxDurationMs is exceeded', () => {
+    const processor = new ResultProcessor();
+    processor.config.filters = [{ agent: '*', maxDurationMs: 100 }];
+
+    const { passed, reason } = processor.applyFilters({
+      agent: 'any-agent', task: 't', durationMs: 500
+    });
+
+    expect(passed).toBe(false);
+    expect(reason).toMatch(/500ms exceeds filter max 100ms/);
+  });
+
+  test('skips custom filter when agent does not match', () => {
+    const processor = new ResultProcessor();
+    processor.config.filters = [{ agent: 'specific-agent', maxDurationMs: 100 }];
+
+    const { passed } = processor.applyFilters({
+      agent: 'other-agent', task: 't', durationMs: 500
+    });
+
+    expect(passed).toBe(true);
+  });
+});

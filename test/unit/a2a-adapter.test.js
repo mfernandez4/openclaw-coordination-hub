@@ -290,3 +290,186 @@ describe('A2AAdapter.syncRegistryFromRedis()', () => {
     expect(adapter.getAgent('hub')).toBeDefined();
   });
 });
+
+// ─── handleCoordination ──────────────────────────────────────────────────────
+
+describe('A2AAdapter.handleCoordination()', () => {
+  let adapter, mockPubSub;
+  beforeEach(() => {
+    mockPubSub = { publish: vi.fn(), subscribe: vi.fn(), channels: new Map() };
+    adapter = new A2AAdapter({ agentId: 'hub', pubsub: mockPubSub });
+  });
+
+  test('delegates every message to handleNegotiation()', () => {
+    const spy = vi.spyOn(adapter, 'handleNegotiation').mockImplementation(() => {});
+    const msg = { type: 'negotiate', from: 'agent-x', payload: {} };
+    adapter.handleCoordination(msg);
+    expect(spy).toHaveBeenCalledWith(msg);
+  });
+});
+
+// ─── handleMessage() remaining switch cases ──────────────────────────────────
+
+describe('A2AAdapter.handleMessage() switch coverage', () => {
+  let adapter, mockPubSub;
+  beforeEach(() => {
+    mockPubSub = { publish: vi.fn(), subscribe: vi.fn() };
+    adapter = new A2AAdapter({ agentId: 'hub', pubsub: mockPubSub });
+  });
+
+  test('routes result type to handleResult()', () => {
+    const spy = vi.spyOn(adapter, 'handleResult').mockImplementation(() => {});
+    adapter.handleMessage({ type: 'result', from: 'a', to: 'hub', payload: {} });
+    expect(spy).toHaveBeenCalledOnce();
+  });
+
+  test('routes error type to handleError()', () => {
+    const spy = vi.spyOn(adapter, 'handleError').mockImplementation(() => {});
+    adapter.handleMessage({ type: 'error', from: 'a', to: 'hub', payload: {} });
+    expect(spy).toHaveBeenCalledOnce();
+  });
+
+  test('routes heartbeat type to handleHeartbeat()', () => {
+    const spy = vi.spyOn(adapter, 'handleHeartbeat').mockImplementation(() => {});
+    adapter.handleMessage({ type: 'heartbeat', from: 'a', to: 'hub', payload: { status: 'online' } });
+    expect(spy).toHaveBeenCalledOnce();
+  });
+
+  test('routes handoff type to handleTask()', () => {
+    const spy = vi.spyOn(adapter, 'handleTask').mockImplementation(() => {});
+    adapter.handleMessage({ type: 'handoff', from: 'a', to: 'hub', payload: {} });
+    expect(spy).toHaveBeenCalledOnce();
+  });
+
+  test('routes negotiate type to handleNegotiation()', () => {
+    const spy = vi.spyOn(adapter, 'handleNegotiation').mockImplementation(() => {});
+    adapter.handleMessage({ type: 'negotiate', from: 'a', to: 'hub', payload: {} });
+    expect(spy).toHaveBeenCalledOnce();
+  });
+});
+
+// ─── coordinate() and handoffTo() ────────────────────────────────────────────
+
+describe('A2AAdapter.coordinate() and handoffTo()', () => {
+  let adapter, mockPubSub;
+  beforeEach(() => {
+    const channels = new Map();
+    mockPubSub = {
+      published: [],
+      async publish(ch, data) { this.published.push({ ch, data }); return 1; },
+      async subscribe(ch, fn) {
+        if (!channels.has(ch)) channels.set(ch, new Set());
+        channels.get(ch).add(fn);
+      }
+    };
+    adapter = new A2AAdapter({ agentId: 'hub', pubsub: mockPubSub });
+  });
+
+  test('coordinate() publishes a negotiate message to a2a:coordination', async () => {
+    await adapter.coordinate('task-offer', { taskId: 't-1' });
+    const pub = mockPubSub.published[0];
+    expect(pub.ch).toBe('a2a:coordination');
+    expect(pub.data.type).toBe('negotiate');
+    expect(pub.data.from).toBe('hub');
+    expect(pub.data.payload.coordinationType).toBe('task-offer');
+    expect(pub.data.payload.taskId).toBe('t-1');
+  });
+
+  test('coordinate() returns a message id string', async () => {
+    const id = await adapter.coordinate('ping', {});
+    expect(typeof id).toBe('string');
+    expect(id).toMatch(/^msg:/);
+  });
+
+  test('handoffTo() sends a handoff message to the target agent inbox', async () => {
+    await adapter.handoffTo('worker-2', 'do the thing', { priority: 1 });
+    const pub = mockPubSub.published[0];
+    expect(pub.ch).toBe('a2a:inbox:worker-2');
+    expect(pub.data.type).toBe('handoff');
+    expect(pub.data.payload.task).toBe('do the thing');
+    expect(pub.data.payload.handedOffBy).toBe('hub');
+    expect(pub.data.payload.priority).toBe(1);
+  });
+
+  test('handoffTo() defaults priority to 0 when not in context', async () => {
+    await adapter.handoffTo('worker-3', 'task', {});
+    const pub = mockPubSub.published[0];
+    expect(pub.data.payload.priority).toBe(0);
+  });
+});
+
+// ─── stub handler bodies ─────────────────────────────────────────────────────
+
+describe('A2AAdapter stub handlers (base class behaviour)', () => {
+  let adapter;
+  beforeEach(() => {
+    adapter = new A2AAdapter({ agentId: 'hub', pubsub: { publish: vi.fn(), subscribe: vi.fn() } });
+  });
+
+  test('handleTask() does not throw', () => {
+    expect(() => adapter.handleTask('a', 'hub', { task: 'x' })).not.toThrow();
+  });
+
+  test('handleResult() does not throw', () => {
+    expect(() => adapter.handleResult('a', 'hub', { result: 'ok' })).not.toThrow();
+  });
+
+  test('handleError() does not throw', () => {
+    expect(() => adapter.handleError('a', 'hub', { message: 'oops' })).not.toThrow();
+  });
+
+  test('handleAck() does not throw', () => {
+    expect(() => adapter.handleAck('a', 'hub', {})).not.toThrow();
+  });
+
+  test('handleNegotiation() does not throw', () => {
+    expect(() => adapter.handleNegotiation({ from: 'a', payload: {} })).not.toThrow();
+  });
+});
+
+// ─── syncRegistryFromRedis() and syncAgentToRedis() error paths ──────────────
+
+describe('A2AAdapter Redis error handling', () => {
+  test('syncRegistryFromRedis() logs error and does not throw when hgetall rejects', async () => {
+    const mockClient = {
+      hgetall: vi.fn().mockRejectedValue(new Error('connection lost')),
+      mget: vi.fn()
+    };
+    const adapter = new A2AAdapter({ agentId: 'hub', pubsub: { client: mockClient } });
+    await expect(adapter.syncRegistryFromRedis()).resolves.toBeUndefined();
+  });
+
+  test('syncAgentToRedis() logs error and does not throw when hset rejects', async () => {
+    const mockClient = { hset: vi.fn().mockRejectedValue(new Error('redis down')) };
+    const adapter = new A2AAdapter({ agentId: 'hub', pubsub: { client: mockClient } });
+    await expect(adapter.syncAgentToRedis('agent-1', {})).resolves.toBeUndefined();
+  });
+});
+
+// ─── handleBroadcast sync-on-heartbeat ───────────────────────────────────────
+
+describe('A2AAdapter.handleBroadcast() sync trigger', () => {
+  test('triggers syncRegistryFromRedis() on heartbeat messages', () => {
+    const adapter = new A2AAdapter({ agentId: 'hub' });
+    const syncSpy = vi.spyOn(adapter, 'syncRegistryFromRedis').mockResolvedValue(undefined);
+    vi.spyOn(adapter, 'handleMessage').mockImplementation(() => {});
+    adapter.handleBroadcast({ type: 'heartbeat', from: 'a', to: '*', payload: {} });
+    expect(syncSpy).toHaveBeenCalledOnce();
+  });
+
+  test('triggers syncRegistryFromRedis() on result messages', () => {
+    const adapter = new A2AAdapter({ agentId: 'hub' });
+    const syncSpy = vi.spyOn(adapter, 'syncRegistryFromRedis').mockResolvedValue(undefined);
+    vi.spyOn(adapter, 'handleMessage').mockImplementation(() => {});
+    adapter.handleBroadcast({ type: 'result', from: 'a', to: '*', payload: {} });
+    expect(syncSpy).toHaveBeenCalledOnce();
+  });
+
+  test('does not trigger sync for other message types', () => {
+    const adapter = new A2AAdapter({ agentId: 'hub' });
+    const syncSpy = vi.spyOn(adapter, 'syncRegistryFromRedis').mockResolvedValue(undefined);
+    vi.spyOn(adapter, 'handleMessage').mockImplementation(() => {});
+    adapter.handleBroadcast({ type: 'task', from: 'a', to: '*', payload: {} });
+    expect(syncSpy).not.toHaveBeenCalled();
+  });
+});
