@@ -3,7 +3,7 @@
 ## Completed
 
 ### `shared/` — Cross-agent artifact sharing
-**Status:** Done (merged in feat/shared-cross-agent-store)
+**Status:** Done (introduced in PR #52)
 
 `SharedStore` (`src/shared-store.js`) extends `ArtifactStore` with:
 - `find({ agentId, tags, taskId, type, filename })` — query-based artifact discovery

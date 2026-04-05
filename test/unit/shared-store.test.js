@@ -94,7 +94,7 @@ describe('SharedStore.writeArtifact() — artifact_ready notification', () => {
     } finally { cleanup(tmpDir); }
   });
 
-  test('publish failure does not throw or fail the write', async () => {
+  test('publish failure does not throw or fail the write (async rejection)', async () => {
     const mockRedis = { publish: vi.fn().mockRejectedValue(new Error('Redis gone')) };
     const { store, tmpDir } = makeTmpStore(mockRedis);
     try {
@@ -103,6 +103,18 @@ describe('SharedStore.writeArtifact() — artifact_ready notification', () => {
       expect(id).toBeTruthy();
       // Let the rejected promise flush — must not cause unhandled rejection
       await Promise.resolve();
+    } finally { cleanup(tmpDir); }
+  });
+
+  test('publish failure does not throw or fail the write (sync throw)', () => {
+    // Guards against a Redis client whose publish() throws synchronously
+    // (callback-based clients, or a client that returns a non-Promise value).
+    const mockRedis = { publish: vi.fn(() => { throw new Error('sync boom'); }) };
+    const { store, tmpDir } = makeTmpStore(mockRedis);
+    try {
+      let id;
+      expect(() => { id = store.writeArtifact('worker-a', 'f.txt', 'x'); }).not.toThrow();
+      expect(id).toBeTruthy();
     } finally { cleanup(tmpDir); }
   });
 
@@ -234,6 +246,29 @@ describe('SharedStore.find()', () => {
       // Should not throw — just skips the bad entry
       expect(() => store.find({})).not.toThrow();
       expect(store.find({})).toEqual([]);
+    } finally { cleanup(tmpDir); }
+  });
+
+  test('find({ agentId }) does not return artifacts from agents whose ID shares a prefix', () => {
+    // Regression: listArtifacts('agent') prefix-matches 'agent-1-...' artifact IDs.
+    // matchesQuery must re-check manifest.agentId for exact equality.
+    const { store, tmpDir } = makeTmpStore();
+    try {
+      store.writeArtifact('agent', 'a.txt', 'x');
+      store.writeArtifact('agent-1', 'b.txt', 'y');
+      const results = store.find({ agentId: 'agent' });
+      expect(results).toHaveLength(1);
+      expect(results[0].agentId).toBe('agent');
+    } finally { cleanup(tmpDir); }
+  });
+
+  test('find({ tags: <string> }) returns empty array without throwing', () => {
+    // Regression: passing a string instead of string[] must not crash via .every().
+    const { store, tmpDir } = makeTmpStore();
+    try {
+      store.writeArtifact('a', 'f.txt', 'x', { tags: ['coding'] });
+      expect(() => store.find({ tags: 'coding' })).not.toThrow();
+      expect(store.find({ tags: 'coding' })).toEqual([]);
     } finally { cleanup(tmpDir); }
   });
 });

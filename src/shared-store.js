@@ -60,7 +60,11 @@ class SharedStore extends ArtifactStore {
         timestamp: new Date().toISOString()
       });
       // Fire-and-forget: storage write already succeeded; notification failure is non-fatal.
-      this.redis.publish(ARTIFACT_NOTIFY_CHANNEL, notification).catch(() => {});
+      // Promise.resolve() normalises both Promise-returning and sync clients; the outer
+      // try/catch guards against a client whose publish() throws synchronously.
+      try {
+        Promise.resolve(this.redis.publish(ARTIFACT_NOTIFY_CHANNEL, notification)).catch(() => {});
+      } catch (_) {}
     }
 
     return artifactId;
@@ -106,9 +110,16 @@ class SharedStore extends ArtifactStore {
 function matchesQuery(manifest, query) {
   const meta = manifest.metadata || {};
 
-  if (query.tags && query.tags.length > 0) {
-    const manifestTags = meta.tags || [];
-    if (!query.tags.every(t => manifestTags.includes(t))) return false;
+  // Exact agentId match — listArtifacts() uses a prefix filter so 'agent' would
+  // otherwise also return artifacts from 'agent-1'. Re-check the manifest field.
+  if (query.agentId !== undefined && manifest.agentId !== query.agentId) return false;
+
+  if (query.tags !== undefined) {
+    if (!Array.isArray(query.tags)) return false;
+    if (query.tags.length > 0) {
+      const manifestTags = Array.isArray(meta.tags) ? meta.tags : [];
+      if (!query.tags.every(t => manifestTags.includes(t))) return false;
+    }
   }
 
   if (query.taskId !== undefined && meta.taskId !== query.taskId) return false;
