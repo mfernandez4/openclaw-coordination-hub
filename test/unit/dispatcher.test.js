@@ -175,6 +175,50 @@ describe('TaskDispatcher.stop()', () => {
   });
 });
 
+// ─── start() ─────────────────────────────────────────────────────────────────
+
+describe('TaskDispatcher.start()', () => {
+  test('sets running=true and logs Started', async () => {
+    const d = new TaskDispatcher({ pollTimeout: 1 });
+    // Override connect() so no live Redis is needed
+    d.connect = vi.fn(async () => {
+      d.client    = makeMockRedis();
+      d.publisher = makeMockRedis();
+    });
+    // Override run() to return immediately
+    d.run = vi.fn(async () => {});
+
+    await d.start();
+
+    expect(d.connect).toHaveBeenCalledOnce();
+    expect(d.running).toBe(true);
+    expect(d.run).toHaveBeenCalledOnce();
+  });
+
+  test('crash in run() sets exitCode=1 and calls process.exit', async () => {
+    const d = new TaskDispatcher({ pollTimeout: 1 });
+    d.connect = vi.fn(async () => {
+      d.client    = makeMockRedis();
+      d.publisher = makeMockRedis();
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {});
+    vi.useFakeTimers();
+
+    // Simulate run() crashing immediately
+    d.run = vi.fn(() => Promise.reject(new Error('fatal crash')));
+
+    await d.start();
+    await vi.runAllTimersAsync();
+
+    expect(process.exitCode).toBe(1);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+
+    vi.useRealTimers();
+    exitSpy.mockRestore();
+  });
+});
+
 // ─── run() loop ──────────────────────────────────────────────────────────────
 //
 // Stop the loop deterministically by having the brpop mock set running=false
