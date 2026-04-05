@@ -86,6 +86,18 @@ describe('SharedStore.writeArtifact() — artifact_ready notification', () => {
     } finally { cleanup(tmpDir); }
   });
 
+  test('publish normalizes non-array tags to [] in the notification payload', () => {
+    // Regression: metadata.tags || [] passes through truthy non-arrays (e.g. a string).
+    // The artifact_ready payload must always carry tags as string[].
+    const mockRedis = { publish: vi.fn().mockResolvedValue(1) };
+    const { store, tmpDir } = makeTmpStore(mockRedis);
+    try {
+      store.writeArtifact('worker-a', 'f.txt', 'x', { tags: 'coding' });
+      const [, raw] = mockRedis.publish.mock.calls[0];
+      expect(JSON.parse(raw).tags).toEqual([]);
+    } finally { cleanup(tmpDir); }
+  });
+
   test('does NOT publish when redis is null', () => {
     const { store, tmpDir } = makeTmpStore(null);
     try {

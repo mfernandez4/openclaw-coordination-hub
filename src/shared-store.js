@@ -55,7 +55,7 @@ class SharedStore extends ArtifactStore {
         artifactId,
         agentId,
         filename,
-        tags: metadata.tags || [],
+        tags: Array.isArray(metadata.tags) ? metadata.tags : [],
         taskId: metadata.taskId || null,
         timestamp: new Date().toISOString()
       });
