@@ -10,11 +10,13 @@
  * - Coordination channel for peer negotiation
  * - Agent registry for discovery
  */
+const { EventEmitter } = require('events');
 const { RedisPubSub } = require('./redis-pubsub');
 const { logger } = require('./logger');
 
-class A2AAdapter {
+class A2AAdapter extends EventEmitter {
   constructor(options = {}) {
+    super();
     this.pubsub = options.pubsub || null;
     this.agentId = options.agentId || 'hub';
     this.messageTypes = ['task', 'result', 'error', 'heartbeat', 'handoff', 'negotiate', 'ack'];
@@ -162,6 +164,18 @@ class A2AAdapter {
     // Best-effort periodic pull from Redis to avoid local/remote drift.
     if (message.type === 'heartbeat' || message.type === 'result') {
       this.syncRegistryFromRedis().catch(() => {});
+    }
+
+    // Artifact availability notification from SharedStore.
+    // Emit as an event so hub/workers can subscribe without coupling to handleMessage.
+    if (message.type === 'artifact_ready') {
+      logger.info('a2a', `Artifact ready: ${message.artifactId}`, {
+        artifactId: message.artifactId,
+        agentId: message.agentId,
+        tags: message.tags
+      });
+      this.emit('artifact_ready', message);
+      return;
     }
 
     this.handleMessage(message);

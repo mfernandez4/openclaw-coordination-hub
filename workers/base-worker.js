@@ -4,7 +4,7 @@
  */
 
 const EventEmitter = require('events');
-const { ArtifactStore } = require('../src/artifact-store');
+const { SharedStore } = require('../src/shared-store');
 const { logger } = require('../src/logger');
 
 // Fixed TTL for the shared a2a:registry hash key.
@@ -31,7 +31,7 @@ class BaseWorker extends EventEmitter {
     this.currentTask = null;
     this.startTime = null;
 
-    this.artifacts = options.artifactStore || new ArtifactStore();
+    this.artifacts = options.artifactStore || new SharedStore();
   }
 
   /**
@@ -43,6 +43,10 @@ class BaseWorker extends EventEmitter {
       host: process.env.REDIS_HOST || 'redis',
       port: process.env.REDIS_PORT || 6379
     });
+    // Wire live Redis into SharedStore so artifact_ready notifications are published.
+    if (this.artifacts instanceof SharedStore) {
+      this.artifacts.redis = this.redis;
+    }
     logger.info(this.agentId, 'Connecting to Redis');
   }
 
