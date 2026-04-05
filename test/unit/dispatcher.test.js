@@ -139,8 +139,8 @@ describe('TaskDispatcher.routeTask()', () => {
   });
 
   test('falls back to task.task when task.type is absent', async () => {
-    // task.task = 'coding' won't match a type name but type is resolved via task field
-    await d.routeTask({ id: 'task-7', task: 'coding', type: 'coding' });
+    // Omit task.type entirely — routeTask must resolve the type from task.task
+    await d.routeTask({ id: 'task-7', task: 'coding' });
     const [queue] = d.client.lpush.mock.calls[0];
     expect(queue).toBe('a2a:inbox:coding');
   });
@@ -202,20 +202,24 @@ describe('TaskDispatcher.start()', () => {
       d.publisher = makeMockRedis();
     });
 
+    const originalExitCode = process.exitCode;
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {});
     vi.useFakeTimers();
 
-    // Simulate run() crashing immediately
-    d.run = vi.fn(() => Promise.reject(new Error('fatal crash')));
+    try {
+      // Simulate run() crashing immediately
+      d.run = vi.fn(() => Promise.reject(new Error('fatal crash')));
 
-    await d.start();
-    await vi.runAllTimersAsync();
+      await d.start();
+      await vi.runAllTimersAsync();
 
-    expect(process.exitCode).toBe(1);
-    expect(exitSpy).toHaveBeenCalledWith(1);
-
-    vi.useRealTimers();
-    exitSpy.mockRestore();
+      expect(process.exitCode).toBe(1);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    } finally {
+      process.exitCode = originalExitCode;
+      vi.useRealTimers();
+      exitSpy.mockRestore();
+    }
   });
 });
 
@@ -266,22 +270,24 @@ describe('TaskDispatcher run() loop', () => {
 
     vi.useFakeTimers();
 
-    let first = true;
-    d.client.brpop.mockImplementation(async () => {
-      if (first) { first = false; return ['coordination:tasks:normal', JSON.stringify(task)]; }
-      d.running = false;
-      return null;
-    });
-    vi.spyOn(d, 'routeTask').mockRejectedValueOnce(new Error('redis down'));
+    try {
+      let first = true;
+      d.client.brpop.mockImplementation(async () => {
+        if (first) { first = false; return ['coordination:tasks:normal', JSON.stringify(task)]; }
+        d.running = false;
+        return null;
+      });
+      vi.spyOn(d, 'routeTask').mockRejectedValueOnce(new Error('redis down'));
 
-    d.running = true;
-    const loopPromise = d.run();
+      d.running = true;
+      const loopPromise = d.run();
 
-    // Advance past the 1000ms backoff in the catch block
-    await vi.runAllTimersAsync();
-    await loopPromise;
-
-    vi.useRealTimers();
-    // No unhandled rejection — loop survived the error
+      // Advance past the 1000ms backoff in the catch block
+      await vi.runAllTimersAsync();
+      await loopPromise;
+      // No unhandled rejection — loop survived the error
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
