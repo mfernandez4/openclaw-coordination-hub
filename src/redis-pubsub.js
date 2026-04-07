@@ -11,6 +11,14 @@ const { logger } = require('./logger');
 const MAX_RECONNECT_FAILURES = 5;
 
 class RedisPubSub {
+  /**
+   * @param {Object} options
+   * @param {string} [options.host] - Redis host
+   * @param {number} [options.port] - Redis port
+   * @param {Function} [options.redisClientClass] - Redis client constructor
+   * @param {Function} [options.onMaxReconnectFailures] - Callback invoked when max reconnect failures is reached.
+   *   Receives no arguments. Default exits the process with code 1.
+   */
   constructor(options = {}) {
     this.host = options.host || process.env.REDIS_HOST || 'redis';
     this.port = options.port || process.env.REDIS_PORT || 6379;
@@ -26,6 +34,10 @@ class RedisPubSub {
     this.status = 'disconnected';
     this.reconnectFailures = 0;
     this.shuttingDown = false;
+    this.onMaxReconnectFailures = options.onMaxReconnectFailures || (() => {
+      process.exitCode = 1;
+      setTimeout(() => process.exit(1), 100);
+    });
   }
 
   async connect() {
@@ -94,8 +106,7 @@ class RedisPubSub {
         logger.error('redis-pubsub', `Reconnect failed (${this.reconnectFailures}/${MAX_RECONNECT_FAILURES})`, { role });
         if (this.reconnectFailures >= MAX_RECONNECT_FAILURES) {
           logger.fatal('redis-pubsub', 'Max reconnect failures reached. Exiting.', { role, reconnectFailures: this.reconnectFailures, host: this.host, port: this.port });
-          process.exitCode = 1;
-          setTimeout(() => process.exit(1), 100);
+          this.onMaxReconnectFailures();
         }
       });
 
