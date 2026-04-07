@@ -69,8 +69,9 @@ class RedisPubSub {
       });
 
       redis.on('error', (err) => {
-        logger.error('redis-pubsub', `Error: ${err.message}`, { role, error: err.message });
+        logger.error('redis-pubsub', `Error: ${err.message}`, { role, error: err.message, reconnectFailures: this.reconnectFailures });
         this.status = 'error';
+        this.reconnectFailures++;
       });
 
       redis.on('close', () => {
