@@ -197,8 +197,8 @@ class BaseWorker extends EventEmitter {
   async pollTask() {
     try {
       // BRPOPLPUSH: atomically move task from inbox to pending key.
-      // Pending key format: a2a:pending:{agentId}:{taskId}
-      // TTL set on the pending key so stale tasks auto-expire if worker dies.
+      // Pending key format: a2a:pending:{agentId}:{ts}:{rand}
+      // TTL set on the pending key so stale tasks self-expire if worker dies.
       const pendingKey = `a2a:pending:${this.agentId}:${Date.now()}:${Math.random().toString(36).substr(2, 8)}`;
       const result = await this.redis.brpoplpush(this.inboxKey, pendingKey, this.pollTimeout);
 
@@ -206,13 +206,19 @@ class BaseWorker extends EventEmitter {
         return null; // No task, timeout
       }
 
-      // Store pending key so publishResult / error handler can clean it up
-      this.currentPendingKey = pendingKey;
-
-      // Set TTL on pending key so abandoned tasks self-expire (worker crash → supervisor re-queues)
-      await this.redis.expire(pendingKey, 60);
-
-      return JSON.parse(result);
+      // Safety: if expire or JSON.parse fails after claim, re-queue to inbox
+      // so the task is never lost or orphaned with TTL=-1.
+      try {
+        await this.redis.expire(pendingKey, 60);
+        this.currentPendingKey = pendingKey;
+        return JSON.parse(result);
+      } catch (innerError) {
+        // expire or JSON.parse failed — re-queue the task to inbox
+        await this.redis.lpush(this.inboxKey, result).catch(() => {});
+        logger.error(this.agentId, 'Post-claim error, task re-queued', { pendingKey, error: innerError.message });
+        this.currentPendingKey = null;
+        return null;
+      }
     } catch (error) {
       logger.error(this.agentId, 'Poll error', { error: error.message });
       return null;
