@@ -18,6 +18,7 @@ function makeMockRedis() {
     del:     vi.fn().mockResolvedValue(1),
     publish: vi.fn().mockResolvedValue(1),
     blpop:   vi.fn().mockResolvedValue(null),
+    brpoplpush: vi.fn().mockResolvedValue(null),
     quit:    vi.fn().mockResolvedValue('OK'),
   };
 }
@@ -226,32 +227,37 @@ describe('BaseWorker', () => {
   // ─── pollTask() ─────────────────────────────────────────────────────────────
 
   describe('pollTask()', () => {
-    test('returns null when blpop times out', async () => {
-      mockRedis.blpop = vi.fn().mockResolvedValue(null);
+    test('returns null when brpoplpush times out', async () => {
+      mockRedis.brpoplpush = vi.fn().mockResolvedValue(null);
       const result = await worker.pollTask();
       expect(result).toBeNull();
     });
 
-    test('returns parsed task when blpop returns a message', async () => {
+    test('returns parsed task when brpoplpush returns a message', async () => {
       const task = { task: 'list-files', taskId: 'task:1', context: { path: '/tmp' } };
-      mockRedis.blpop = vi.fn().mockResolvedValue([
-        'a2a:inbox:test-agent',
-        JSON.stringify(task)
-      ]);
+      mockRedis.brpoplpush = vi.fn().mockResolvedValue(JSON.stringify(task));
+      mockRedis.expire = vi.fn().mockResolvedValue(1);
       const result = await worker.pollTask();
       expect(result).toEqual(task);
     });
 
-    test('polls the correct inbox key', async () => {
+    test('polls the correct inbox key with brpoplpush and sets pending TTL', async () => {
+      mockRedis.brpoplpush = vi.fn().mockResolvedValue(JSON.stringify({ task: 'list-files', taskId: 'task:1' }));
+      mockRedis.expire = vi.fn().mockResolvedValue(1);
       await worker.pollTask();
-      expect(mockRedis.blpop).toHaveBeenCalledWith(
+      expect(mockRedis.brpoplpush).toHaveBeenCalledWith(
         'a2a:inbox:test-agent',
+        expect.stringMatching(/^a2a:pending:test-agent:/),
         expect.any(Number)
+      );
+      expect(mockRedis.expire).toHaveBeenCalledWith(
+        expect.stringMatching(/^a2a:pending:test-agent:/),
+        60
       );
     });
 
-    test('returns null on blpop error', async () => {
-      mockRedis.blpop = vi.fn().mockRejectedValue(new Error('connection lost'));
+    test('returns null on brpoplpush error', async () => {
+      mockRedis.brpoplpush = vi.fn().mockRejectedValue(new Error('connection lost'));
       const result = await worker.pollTask();
       expect(result).toBeNull();
     });

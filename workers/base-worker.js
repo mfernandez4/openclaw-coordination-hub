@@ -145,6 +145,11 @@ class BaseWorker extends EventEmitter {
    */
   async publishResult(result) {
     await this.redis.publish(this.coordinationChannel, JSON.stringify(result));
+    // Clean up pending key — task completed (success or failure)
+    if (this.currentPendingKey) {
+      await this.redis.del(this.currentPendingKey);
+      this.currentPendingKey = null;
+    }
     logger.info(this.agentId, `Result published: ${result.status}`, { status: result.status });
   }
 
@@ -191,15 +196,23 @@ class BaseWorker extends EventEmitter {
    */
   async pollTask() {
     try {
-      // BLPOP returns [key, message] or null
-      const result = await this.redis.blpop(this.inboxKey, this.pollTimeout);
+      // BRPOPLPUSH: atomically move task from inbox to pending key.
+      // Pending key format: a2a:pending:{agentId}:{taskId}
+      // TTL set on the pending key so stale tasks auto-expire if worker dies.
+      const pendingKey = `a2a:pending:${this.agentId}:${Date.now()}:${Math.random().toString(36).substr(2, 8)}`;
+      const result = await this.redis.brpoplpush(this.inboxKey, pendingKey, this.pollTimeout);
 
       if (!result) {
         return null; // No task, timeout
       }
 
-      const [key, message] = result;
-      return JSON.parse(message);
+      // Store pending key so publishResult / error handler can clean it up
+      this.currentPendingKey = pendingKey;
+
+      // Set TTL on pending key so abandoned tasks self-expire (worker crash → supervisor re-queues)
+      await this.redis.expire(pendingKey, 60);
+
+      return JSON.parse(result);
     } catch (error) {
       logger.error(this.agentId, 'Poll error', { error: error.message });
       return null;
@@ -245,6 +258,14 @@ class BaseWorker extends EventEmitter {
         logger.error(this.agentId, 'Task error', { error: error.message, task: taskPayload.task });
         const errorResult = this.formatResult(taskPayload, null, 'failed', error.message);
         await this.publishResult(errorResult);
+      } finally {
+        // Always clear pending key on task completion or error.
+        // If publishResult succeeded, it already deleted it.
+        // If we got here via error, delete it here as a safety net.
+        if (this.currentPendingKey) {
+          await this.redis.del(this.currentPendingKey).catch(() => {});
+          this.currentPendingKey = null;
+        }
       }
 
       this.currentTask = null;
