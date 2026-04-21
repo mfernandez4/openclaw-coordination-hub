@@ -66,7 +66,7 @@ class RedisPubSub {
 
   _setupClient(role, onReady) {
     return new Promise((resolve) => {
-      const redis = new this.RedisClient({ host: this.host, port: this.port, password: this.options.password || process.env.REDIS_PASSWORD || undefined });
+      const redis = new this.RedisClient({ host: this.host, port: this.port, password: this.options?.password || process.env.REDIS_PASSWORD || undefined });
 
       redis.on('connect', () => {
         logger.info('redis-pubsub', `Connected to ${this.host}:${this.port}`, { role });
