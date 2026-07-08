@@ -160,6 +160,103 @@ function inferTaskType(task) {
   return null;
 }
 
+/** Commit hash pattern: 7–40 lowercase hex chars (matches git short/long hash) */
+const COMMIT_HASH_RE = /^[a-f0-9]{7,40}$/;
+
+/**
+ * Validate a completion payload.
+ *
+ * Required on a `done` completion:
+ *   - commitHash  — non-empty string, 7–40 hex chars
+ *   - changedFiles — array of non-empty strings
+ *   - verification — object with at least one passing key (value is truthy)
+ *
+ * Required on `blocked` / `invalid`:
+ *   - blocker     — human-readable reason
+ *
+ * Optional on `blocked` / `invalid`:
+ *   - mitigation  — recommended next step
+ *
+ * @param {object} completion
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validateCompletion(completion) {
+  if (!completion || typeof completion !== 'object') {
+    return { valid: false, error: 'Completion must be a non-null object' };
+  }
+
+  const { state } = completion;
+
+  if (state === 'done') {
+    // commitHash required and must be a valid git hash
+    if (!completion.commitHash) {
+      return { valid: false, error: 'Missing required field: commitHash' };
+    }
+    if (typeof completion.commitHash !== 'string') {
+      return { valid: false, error: 'Field commitHash must be a string' };
+    }
+    if (!COMMIT_HASH_RE.test(completion.commitHash)) {
+      return {
+        valid: false,
+        error: `Field commitHash must be 7–40 hex chars, got '${completion.commitHash}'`
+      };
+    }
+
+    // changedFiles required and non-empty array of strings
+    if (!Array.isArray(completion.changedFiles)) {
+      return { valid: false, error: 'Field changedFiles must be an array' };
+    }
+    if (completion.changedFiles.length === 0) {
+      return { valid: false, error: 'Field changedFiles must be a non-empty array' };
+    }
+    for (const f of completion.changedFiles) {
+      if (typeof f !== 'string' || f.trim().length === 0) {
+        return { valid: false, error: 'Each entry in changedFiles must be a non-empty string' };
+      }
+    }
+
+    // verification required — at least one passing key (truthy value)
+    if (!completion.verification || typeof completion.verification !== 'object') {
+      return {
+        valid: false,
+        error: 'Missing required field: verification (object with passing checks)'
+      };
+    }
+    const verifKeys = Object.keys(completion.verification);
+    if (verifKeys.length === 0) {
+      return { valid: false, error: 'Field verification must have at least one key' };
+    }
+    const hasPassing = verifKeys.some(k => completion.verification[k]);
+    if (!hasPassing) {
+      return {
+        valid: false,
+        error: 'Field verification must have at least one passing check (truthy value)'
+      };
+    }
+
+    return { valid: true };
+  }
+
+  if (state === 'blocked' || state === 'invalid') {
+    if (!completion.blocker || typeof completion.blocker !== 'string' || completion.blocker.trim() === '') {
+      return {
+        valid: false,
+        error: 'Field blocker is required for blocked/invalid completions and must be a non-empty string'
+      };
+    }
+    return { valid: true };
+  }
+
+  if (!state) {
+    return { valid: false, error: 'Missing required field: state' };
+  }
+
+  return {
+    valid: false,
+    error: `Unknown completion state '${state}'. Expected: done | blocked | invalid`
+  };
+}
+
 /**
  * Build a failed task result for an invalid payload
  */
@@ -179,5 +276,7 @@ function buildValidationError(task, reason) {
 module.exports = {
   validateTask,
   buildValidationError,
-  TASK_SCHEMAS
+  validateCompletion,
+  TASK_SCHEMAS,
+  COMMIT_HASH_RE
 };

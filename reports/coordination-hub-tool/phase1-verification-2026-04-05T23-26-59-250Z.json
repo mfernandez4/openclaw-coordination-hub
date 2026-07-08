@@ -1,0 +1,29 @@
+{
+  "generatedAt": "2026-04-05T23:26:59.250Z",
+  "suite": "coordination-hub-tool phase1 verification",
+  "total": 4,
+  "passed": 4,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "verificationAsyncQueued",
+      "pass": true,
+      "details": "task=task:1775431618015:rdfuzbee queued and status hash=queued"
+    },
+    {
+      "name": "verificationDeadLetter",
+      "pass": true,
+      "details": "plugin pre-validation blocked invalid task_type (dead-letter path superseded)"
+    },
+    {
+      "name": "verificationAuditLookup",
+      "pass": true,
+      "details": "completed status found via audit key and status hash updated"
+    },
+    {
+      "name": "verificationTimeoutWaiting",
+      "pass": true,
+      "details": "wait path returned timeout_waiting as expected"
+    }
+  ]
+}

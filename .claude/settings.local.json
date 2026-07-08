@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr:*)",
+      "Bash(gh api:*)",
+      "Bash(docker exec:*)",
+      "Bash(node -e \"require\\('tmp'\\); console.log\\('ok'\\)\")",
+      "Bash(node -e \"require\\('os'\\); console.log\\(require\\('os'\\).tmpdir\\(\\)\\)\")",
+      "Bash(python3 -c \"import sys,json; comments=json.load\\(sys.stdin\\); [print\\(f'--- File: {c[\\\\\"path\\\\\"]} line {c.get\\(\\\\\"line\\\\\",\\\\\"?\\\\\"\\)}\\\\\\\\nBody: {c[\\\\\"body\\\\\"]}\\\\\\\\n'\\) for c in comments]\")",
+      "Bash(git -C F:/ai-workspace/projects/openclaw-coordination-hub checkout main)",
+      "Bash(git -C F:/ai-workspace/projects/openclaw-coordination-hub pull)",
+      "Bash(git:*)",
+      "Bash(python3 -c ':*)",
+      "Bash(node -e ':*)",
+      "Read(//tmp/**)",
+      "Read(//f/ai-workspace/templates/**)",
+      "Bash(node -e \" const d = []; process.stdin.on\\('data', c => d.push\\(c\\)\\); process.stdin.on\\('end', \\(\\) => { const comments = JSON.parse\\(d.join\\(''\\)\\); const newest = comments.filter\\(c => !c.in_reply_to_id\\); newest.forEach\\(c => { if \\(c.id === 3036981435\\) { console.log\\('PATH:', c.path\\); console.log\\('LINE:', c.line\\); console.log\\('BY:', c.user.login\\); console.log\\('BODY:', c.body\\); } }\\); }\\); \")",
+      "Read(//e/ai-stack/openclaw/**)",
+      "Read(//e/ai-stack//**)"
+    ]
+  }
+}

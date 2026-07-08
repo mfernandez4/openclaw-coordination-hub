@@ -1,0 +1,210 @@
+{
+  "generatedAt": "2026-04-06T02:00:20.029Z",
+  "phase": 3,
+  "cycle": 5,
+  "startedAt": "2026-04-06T02:00:19.382Z",
+  "endedAt": "2026-04-06T02:00:20.029Z",
+  "summary": {
+    "status": "on-track",
+    "passed": 2,
+    "failed": 0
+  },
+  "observe": {
+    "before": {
+      "queueDepth": {
+        "high": 0,
+        "normal": 0,
+        "low": 0
+      },
+      "inboxLens": {
+        "a2a:inbox:coding": 0,
+        "a2a:inbox:github-ops": 0,
+        "a2a:inbox:research": 0,
+        "a2a:inbox:dev-ops": 0
+      },
+      "registry": {
+        "dev-ops": "running",
+        "coding": "running",
+        "github-ops": "running",
+        "research": "running"
+      },
+      "pluginTaskHashes": {
+        "total": 34,
+        "queued": 2,
+        "stuck": 0,
+        "terminal": 32
+      }
+    },
+    "after": {
+      "queueDepth": {
+        "high": 0,
+        "normal": 0,
+        "low": 0
+      },
+      "inboxLens": {
+        "a2a:inbox:coding": 0,
+        "a2a:inbox:github-ops": 0,
+        "a2a:inbox:research": 0,
+        "a2a:inbox:dev-ops": 0
+      },
+      "registry": {
+        "dev-ops": "running",
+        "coding": "running",
+        "github-ops": "running",
+        "research": "running"
+      },
+      "pluginTaskHashes": {
+        "total": 36,
+        "queued": 2,
+        "stuck": 0,
+        "terminal": 34
+      }
+    }
+  },
+  "decide": {
+    "strategy": "rotated probes: dispatcher research + direct dev-ops, both non-destructive"
+  },
+  "dispatchVerify": [
+    {
+      "name": "dispatcher_research_health_probe",
+      "dispatched": {
+        "ok": true,
+        "task_id": "task:1775440819409:ym3a86pd",
+        "status": "queued",
+        "accepted_at": "2026-04-06T02:00:19.409Z",
+        "queue_key": "coordination:tasks:normal",
+        "result": null,
+        "next_poll_after_ms": 1000
+      },
+      "verified": {
+        "ok": true,
+        "task_id": "task:1775440819409:ym3a86pd",
+        "status": "completed",
+        "raw": {
+          "type": "result",
+          "taskId": "task:1775440819409:ym3a86pd",
+          "agent": "research",
+          "task": "analyze",
+          "status": "completed",
+          "output": {
+            "success": true,
+            "analysis": {
+              "wordCount": 4,
+              "charCount": 36,
+              "lineCount": 1,
+              "hints": {
+                "hasUrl": false,
+                "hasEmail": false,
+                "hasNumbers": true
+              },
+              "textPreview": "phase3-cycle5 heartbeat health probe"
+            }
+          },
+          "artifacts": [],
+          "error": null,
+          "durationMs": 0,
+          "timestamp": "2026-04-06T02:00:19.411Z",
+          "processedAt": "2026-04-06T02:00:19.412Z",
+          "formatter": "markdown"
+        },
+        "formatted": null,
+        "found_in": "audit_key"
+      },
+      "pass": true
+    },
+    {
+      "name": "direct_devops_status_probe",
+      "dispatched": {
+        "ok": true,
+        "task_id": "task:1775440819716:50iwv1zs",
+        "status": "queued",
+        "accepted_at": "2026-04-06T02:00:19.716Z",
+        "queue_key": "a2a:inbox:dev-ops",
+        "result": null,
+        "next_poll_after_ms": 1000
+      },
+      "verified": {
+        "ok": true,
+        "task_id": "task:1775440819716:50iwv1zs",
+        "status": "completed",
+        "raw": {
+          "type": "result",
+          "taskId": "task:1775440819716:50iwv1zs",
+          "agent": "dev-ops",
+          "task": "status",
+          "status": "completed",
+          "output": {
+            "success": true,
+            "services": [
+              {
+                "name": "openclaw-sbx-agent-group-safe-47f682ec",
+                "status": "Up 12 hours",
+                "image": "openclaw-sandbox:bookworm-slim"
+              },
+              {
+                "name": "openclaw-sbx-agent-main-f331f052",
+                "status": "Up 29 hours",
+                "image": "openclaw-sandbox:bookworm-slim"
+              },
+              {
+                "name": "openclaw-sbx-agent-notify-e3154744",
+                "status": "Up 29 hours",
+                "image": "openclaw-sandbox:bookworm-slim"
+              },
+              {
+                "name": "openclaw-sbx-agent-main-telegram-direct-85408-284fb79c",
+                "status": "Up 29 hours",
+                "image": "openclaw-sandbox:bookworm-slim"
+              },
+              {
+                "name": "openclaw-sbx-agent-notify-cron-437c8869-3c79--1985d5db",
+                "status": "Up 2 days",
+                "image": "openclaw-sandbox:bookworm-slim"
+              },
+              {
+                "name": "openclaw-openclaw-gateway-1",
+                "status": "Up 2 hours (healthy)",
+                "image": "openclaw:tools-local"
+              },
+              {
+                "name": "openclaw-coordination-hub",
+                "status": "Up 6 hours",
+                "image": "node:20-alpine"
+              },
+              {
+                "name": "ollama",
+                "status": "Up 8 days",
+                "image": "ollama/ollama:latest"
+              },
+              {
+                "name": "openclaw-redis",
+                "status": "Up 10 days (healthy)",
+                "image": "redis:7-alpine"
+              },
+              {
+                "name": "n8n-postgres",
+                "status": "Up 10 days",
+                "image": "postgres:16"
+              },
+              {
+                "name": "n8n",
+                "status": "Up 10 days",
+                "image": "n8nio/n8n:latest"
+              }
+            ]
+          },
+          "artifacts": [],
+          "error": null,
+          "durationMs": 189,
+          "timestamp": "2026-04-06T02:00:19.905Z",
+          "processedAt": "2026-04-06T02:00:19.905Z",
+          "formatter": "markdown"
+        },
+        "formatted": null,
+        "found_in": "audit_key"
+      },
+      "pass": true
+    }
+  ],
+  "nextAction": "Continue Phase 3 cycle 6 rotation with intervention gates active."
+}

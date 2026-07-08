@@ -1,0 +1,62 @@
+{
+  "generatedAt": "2026-04-05T23:45:21.056Z",
+  "suite": "coordination-hub-tool phase2 integration",
+  "total": 9,
+  "passed": 9,
+  "failed": 0,
+  "checks": [
+    {
+      "name": "workersOnlinePrecheck",
+      "pass": true,
+      "details": "all required workers online: coding, github-ops, research, dev-ops"
+    },
+    {
+      "name": "dispatcher_coding",
+      "pass": true,
+      "taskId": "task:1775432718309:bfbhkmij",
+      "details": "queue=coordination:tasks:normal, status=completed, found_in=audit_key"
+    },
+    {
+      "name": "dispatcher_research",
+      "pass": true,
+      "taskId": "task:1775432718616:9vqiuqag",
+      "details": "queue=coordination:tasks:normal, status=completed, found_in=audit_key"
+    },
+    {
+      "name": "dispatcher_github_ops",
+      "pass": true,
+      "taskId": "task:1775432718921:2mmhbih1",
+      "details": "queue=coordination:tasks:normal, status=completed, found_in=audit_key"
+    },
+    {
+      "name": "dispatcher_dev_ops",
+      "pass": true,
+      "taskId": "task:1775432719529:mbtsc2lc",
+      "details": "queue=coordination:tasks:normal, status=completed, found_in=audit_key"
+    },
+    {
+      "name": "direct_coding",
+      "pass": true,
+      "taskId": "task:1775432719834:ejy61z6d",
+      "details": "queue=a2a:inbox:coding, status=completed, found_in=audit_key"
+    },
+    {
+      "name": "direct_research",
+      "pass": true,
+      "taskId": "task:1775432720139:tng3jv2m",
+      "details": "queue=a2a:inbox:research, status=completed, found_in=results_list"
+    },
+    {
+      "name": "direct_github_ops",
+      "pass": true,
+      "taskId": "task:1775432720143:kefbk508",
+      "details": "queue=a2a:inbox:github-ops, status=completed, found_in=audit_key"
+    },
+    {
+      "name": "direct_dev_ops",
+      "pass": true,
+      "taskId": "task:1775432720751:e6ndglkb",
+      "details": "queue=a2a:inbox:dev-ops, status=completed, found_in=audit_key"
+    }
+  ]
+}

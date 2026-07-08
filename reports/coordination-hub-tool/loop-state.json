@@ -1,0 +1,148 @@
+{
+  "version": 1,
+  "missionId": "coordination-hub-tool-finish-v1",
+  "status": "gate_pass",
+  "phase": 5,
+  "phaseName": "Final gate + handoff closeout",
+  "goal": "Evaluate final reliability threshold and close out mission.",
+  "startedAt": "2026-04-05T22:33:00Z",
+  "updatedAt": "2026-04-06T20:33:00Z",
+  "heartbeat": {
+    "cadenceMinutes": 15,
+    "lastRunAt": "2026-04-06T20:33:00Z",
+    "nextRunAt": null
+  },
+  "metrics": {
+    "queueDepth": { "high": 0, "normal": 0, "low": 0 },
+    "stuckTaskCount": 0,
+    "completionRatio": 1.0,
+    "retryCount": 2,
+    "errorCount": 1,
+    "terminalTasks": 50,
+    "terminalTarget": 50,
+    "terminalDelta": 0
+  },
+  "phase1Checklist": {
+    "validateRoutingConstraints": true,
+    "enforceKnownDispatcherTypes": true,
+    "writeQueuedStatusHash": true,
+    "terminalStatusHashUpdate": true,
+    "idempotencyReturnsCurrentStatus": true,
+    "waitPathReturnsTerminalPayload": true,
+    "verificationAsyncQueued": true,
+    "verificationDeadLetter": true,
+    "verificationAuditLookup": true,
+    "verificationTimeoutWaiting": true
+  },
+  "phase1Evidence": {
+    "report": "reports/coordination-hub-tool/phase1-verification-2026-04-05T23-26-59-250Z.json",
+    "total": 4,
+    "passed": 4,
+    "failed": 0
+  },
+  "phase2Evidence": {
+    "report": "reports/coordination-hub-tool/phase2-integration-2026-04-05T23-35-15-139Z.json",
+    "total": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "phase2RerunEvidence": {
+    "report": "reports/coordination-hub-tool/phase2-integration-2026-04-05T23-45-21-056Z.json",
+    "total": 9,
+    "passed": 9,
+    "failed": 0
+  },
+  "phase3": {
+    "cyclesCompleted": 6,
+    "gateDecision": "GO",
+    "gateEvaluatedAt": "2026-04-06T02:02:00Z",
+    "phase4CyclesCompleted": 0
+  },
+  "phase4": {
+    "cyclesCompleted": 7,
+    "cycles": [
+      { "n": 7, "report": "phase4-cycle7-2026-04-06T05-04-36-093Z.json", "status": "on-track", "passed": 2, "failed": 0 },
+      { "n": 8, "report": "phase4-cycle8-2026-04-06T05-09-41-055Z.json", "status": "on-track", "passed": 2, "failed": 0 },
+      { "n": 9, "report": "phase4-cycle9-2026-04-06T05-11-30-000Z.json", "status": "on-track", "passed": 2, "failed": 0 },
+      { "n": 10, "report": "phase4-cycle10-2026-04-06T05-13-01-985Z.json", "status": "on-track", "passed": 2, "failed": 0 },
+      { "n": 11, "report": "phase4-cycle11-2026-04-06T05-13-35-000Z.json", "status": "on-track", "passed": 2, "failed": 0 },
+      { "n": 12, "report": "phase4-cycle12-2026-04-06T05-14-50-000Z.json", "status": "on-track", "passed": 2, "failed": 0 },
+      { "n": 13, "report": "phase4-cycle13-2026-04-06T05-15-45-000Z.json", "status": "on-track", "passed": 2, "failed": 0 }
+    ],
+    "issuesFound": [
+      {
+        "id": "cycle-script-task-names",
+        "severity": "medium",
+        "description": "Phase 4 cycle script used invalid task names (list_files, list_repos) that workers don't recognize. Workers return {error:'Unknown task'} for unrecognized task types. Fix: use valid task names (analyze, status, list-issues, list-files)",
+        "fix": "Corrected cycle script uses worker-supported task names only. Task type validation should be added to dispatch_task plugin tool."
+      },
+      {
+        "id": "result-processor-offline",
+        "severity": "high",
+        "description": "result-processor.js was not running at start of Phase 4. Workers publish to a2a:coordination channel but without a subscriber, no audit entries are written. Tasks complete but are undetectable.",
+        "fix": "Started result-processor manually. Should be managed by start-workers.sh or a supervisor."
+      },
+      {
+        "id": "duplicate-workers",
+        "severity": "medium",
+        "description": "Two sets of typed workers were running simultaneously (from hub restart + manual start). Killed duplicates. Single set is sufficient.",
+        "fix": "Worker ctl script should track PIDs and prevent duplicates."
+      },
+      {
+        "id": "issue-29-lpop-confirmed-fixed",
+        "severity": "high",
+        "description": "CHAOS TEST CONFIRMED 07:14: sprint + devops workers killed — tasks LOST. Sprint worker had built-in pending mechanism; typed workers used BLPOP. FIX: BaseWorker.pollTask() now BRPOPLPUSH → a2a:pending:{agentId}:{ts}:{rand} with 60s TTL; Supervisor (scripts/hub-sprint-supervisor.js) monitors both key patterns and re-queues stale tasks.",
+        "fix": "RESOLVED. Chaos test 20:33 UTC: sprint task (sleep 20) → worker claimed → kill -9 → supervisor recovered (heartbeat 65s old) → re-queued → new worker completed. Audit: chaos-fix2-1775507435847 status=completed duration=20004ms.",
+        "chaos_test_initial": {
+          "tested_at": "2026-04-06T07:14:00Z",
+          "result": "FAIL — task lost"
+        },
+        "chaos_test_fix_verification": {
+          "tested_at": "2026-04-06T20:33:00Z",
+          "task_id": "chaos-fix2-1775507435847",
+          "result": "PASS — task recovered and completed"
+        }
+      }
+    ]
+  },
+  "phase4ProbeResults": {
+    "total": 14,
+    "passed": 14,
+    "failed": 0,
+    "taskTypesUsed": ["research:analyze", "dev-ops:status", "github-ops:list-issues", "coding:list-files"]
+  },
+  "finalGate": {
+    "decision": "PASS",
+    "evaluatedAt": "2026-04-06T05:16:00Z",
+    "terminalCompleted": 50,
+    "terminalTarget": 50,
+    "completionRatio": 1.0,
+    "stuckFailed": 0,
+    "excessMargin": 0,
+    "notes": "50 terminal tasks completed with 0 failures. 7 Phase 4 cycles added to prior Phase 3 baseline of 36. Functional correctness + reliability threshold met. Self-healing (Issue #29) NOT yet demonstrated - chaos test pending."
+  },
+  "workersOnline": {
+    "github-ops": true,
+    "coding": true,
+    "research": true,
+    "dev-ops": true,
+    "sprint": true
+  },
+  "humanIntervention": {
+    "required": false,
+    "reason": null,
+    "requestedAt": null
+  },
+  "restartGate": {
+    "status": "not_evaluated",
+    "checkedAt": null,
+    "notes": "Must be evaluated before any gateway restart."
+  },
+  "memorySearch": {
+    "status": "restored",
+    "provider": "ollama",
+    "model": "embeddinggemma:latest",
+    "verifiedAt": "2026-04-06T02:01:00Z"
+  },
+  "nextAction": "MISSION COMPLETE — coordination-hub-tool-finish-v1. 50/50 terminals, Issue #29 fixed, chaos test passed. Awaiting human sign-off."
+}

@@ -1,0 +1,80 @@
+{
+  "cycle": 7,
+  "status": "blocked",
+  "startedAt": "2026-04-06T05:04:10.003Z",
+  "endedAt": "2026-04-06T05:04:36.091Z",
+  "observe": {
+    "before": {
+      "inboxLens": {
+        "coding": 0,
+        "github-ops": 0,
+        "research": 0,
+        "dev-ops": 0
+      }
+    },
+    "after": {
+      "inboxLens": {
+        "coding": 0,
+        "github-ops": 0,
+        "research": 0,
+        "dev-ops": 0
+      }
+    }
+  },
+  "dispatches": [
+    {
+      "name": "githubops_list",
+      "task_id": "task:1775451850016:yke15dzls",
+      "queue_key": "a2a:inbox:github-ops",
+      "dispatched": {
+        "task_id": "task:1775451850016:yke15dzls",
+        "queue_key": "a2a:inbox:github-ops",
+        "name": "githubops_list",
+        "probe": {
+          "name": "githubops_list",
+          "inbox": "a2a:inbox:github-ops",
+          "task": "list_repos",
+          "payload": {
+            "limit": 3
+          }
+        }
+      },
+      "verified": {
+        "status": "timeout_waiting",
+        "found_in": null,
+        "raw": null
+      },
+      "pass": false
+    },
+    {
+      "name": "coding_files",
+      "task_id": "task:1775451850017:w5a6hp4jk",
+      "queue_key": "a2a:inbox:coding",
+      "dispatched": {
+        "task_id": "task:1775451850017:w5a6hp4jk",
+        "queue_key": "a2a:inbox:coding",
+        "name": "coding_files",
+        "probe": {
+          "name": "coding_files",
+          "inbox": "a2a:inbox:coding",
+          "task": "list_files",
+          "payload": {
+            "path": "/tmp",
+            "limit": 5
+          }
+        }
+      },
+      "verified": {
+        "status": "timeout_waiting",
+        "found_in": null,
+        "raw": null
+      },
+      "pass": false
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 2,
+    "total": 2
+  }
+}

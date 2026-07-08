@@ -1,0 +1,661 @@
+{
+  "generatedAt": "2026-04-06T02:00:41.010Z",
+  "phase": 3,
+  "cycle": 6,
+  "startedAt": "2026-04-06T02:00:40.064Z",
+  "endedAt": "2026-04-06T02:00:41.010Z",
+  "summary": {
+    "status": "on-track",
+    "passed": 2,
+    "failed": 0
+  },
+  "observe": {
+    "before": {
+      "queueDepth": {
+        "high": 0,
+        "normal": 0,
+        "low": 0
+      },
+      "inboxLens": {
+        "a2a:inbox:coding": 0,
+        "a2a:inbox:github-ops": 0,
+        "a2a:inbox:research": 0,
+        "a2a:inbox:dev-ops": 0
+      },
+      "registry": {
+        "coding": "running",
+        "github-ops": "running",
+        "dev-ops": "running",
+        "research": "running"
+      },
+      "pluginTaskHashes": {
+        "total": 36,
+        "queued": 2,
+        "stuck": 0,
+        "terminal": 34
+      }
+    },
+    "after": {
+      "queueDepth": {
+        "high": 0,
+        "normal": 0,
+        "low": 0
+      },
+      "inboxLens": {
+        "a2a:inbox:coding": 0,
+        "a2a:inbox:github-ops": 0,
+        "a2a:inbox:research": 0,
+        "a2a:inbox:dev-ops": 0
+      },
+      "registry": {
+        "coding": "running",
+        "github-ops": "running",
+        "dev-ops": "running",
+        "research": "running"
+      },
+      "pluginTaskHashes": {
+        "total": 38,
+        "queued": 2,
+        "stuck": 0,
+        "terminal": 36
+      }
+    }
+  },
+  "decide": {
+    "strategy": "rotated probes: dispatcher github-ops + direct coding, both non-destructive"
+  },
+  "dispatchVerify": [
+    {
+      "name": "dispatcher_github_ops_health_probe",
+      "dispatched": {
+        "ok": true,
+        "task_id": "task:1775440840088:ehstwie1",
+        "status": "queued",
+        "accepted_at": "2026-04-06T02:00:40.088Z",
+        "queue_key": "coordination:tasks:normal",
+        "result": null,
+        "next_poll_after_ms": 1000
+      },
+      "verified": {
+        "ok": true,
+        "task_id": "task:1775440840088:ehstwie1",
+        "status": "completed",
+        "raw": {
+          "type": "result",
+          "taskId": "task:1775440840088:ehstwie1",
+          "agent": "github-ops",
+          "task": "list-prs",
+          "status": "completed",
+          "output": {
+            "success": true,
+            "output": "[]"
+          },
+          "artifacts": [],
+          "error": null,
+          "durationMs": 566,
+          "timestamp": "2026-04-06T02:00:40.655Z",
+          "processedAt": "2026-04-06T02:00:40.655Z",
+          "formatter": "markdown"
+        },
+        "formatted": null,
+        "found_in": "audit_key"
+      },
+      "pass": true
+    },
+    {
+      "name": "direct_coding_list_files_probe",
+      "dispatched": {
+        "ok": true,
+        "task_id": "task:1775440840696:240li6po",
+        "status": "queued",
+        "accepted_at": "2026-04-06T02:00:40.696Z",
+        "queue_key": "a2a:inbox:coding",
+        "result": null,
+        "next_poll_after_ms": 1000
+      },
+      "verified": {
+        "ok": true,
+        "task_id": "task:1775440840696:240li6po",
+        "status": "completed",
+        "raw": {
+          "type": "result",
+          "taskId": "task:1775440840696:240li6po",
+          "agent": "coding",
+          "task": "list-files",
+          "status": "completed",
+          "output": {
+            "files": [
+              {
+                "name": "better-sqlite3-12.8.0.tgz",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/better-sqlite3-12.8.0.tgz"
+              },
+              {
+                "name": "chat_history_1.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_1.err"
+              },
+              {
+                "name": "chat_history_1.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_1.out"
+              },
+              {
+                "name": "chat_history_2.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_2.err"
+              },
+              {
+                "name": "chat_history_2.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_2.out"
+              },
+              {
+                "name": "chat_history_default.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_default.err"
+              },
+              {
+                "name": "chat_history_default.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_default.out"
+              },
+              {
+                "name": "chat_history_limit20.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_limit20.err"
+              },
+              {
+                "name": "chat_history_limit20.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/chat_history_limit20.out"
+              },
+              {
+                "name": "claude-1000",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/claude-1000"
+              },
+              {
+                "name": "cli_sessions_active.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/cli_sessions_active.err"
+              },
+              {
+                "name": "cli_sessions_active.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/cli_sessions_active.out"
+              },
+              {
+                "name": "cli_sessions_all.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/cli_sessions_all.err"
+              },
+              {
+                "name": "cli_sessions_all.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/cli_sessions_all.out"
+              },
+              {
+                "name": "cli_sessions_main.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/cli_sessions_main.err"
+              },
+              {
+                "name": "cli_sessions_main.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/cli_sessions_main.out"
+              },
+              {
+                "name": "docker-pull.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/docker-pull.log"
+              },
+              {
+                "name": "gh-cli-cache",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/gh-cli-cache"
+              },
+              {
+                "name": "health.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/health.err"
+              },
+              {
+                "name": "health.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/health.out"
+              },
+              {
+                "name": "health_1.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/health_1.err"
+              },
+              {
+                "name": "health_1.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/health_1.out"
+              },
+              {
+                "name": "health_2.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/health_2.err"
+              },
+              {
+                "name": "health_2.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/health_2.out"
+              },
+              {
+                "name": "hub-sprint-supervisor.js",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/hub-sprint-supervisor.js"
+              },
+              {
+                "name": "hub-sprint-worker.js",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/hub-sprint-worker.js"
+              },
+              {
+                "name": "hub-sprint-worker.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/hub-sprint-worker.log"
+              },
+              {
+                "name": "hub-worker-out.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/hub-worker-out.log"
+              },
+              {
+                "name": "jiti",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/jiti"
+              },
+              {
+                "name": "node-compile-cache",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/node-compile-cache"
+              },
+              {
+                "name": "node_list.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/node_list.err"
+              },
+              {
+                "name": "node_list.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/node_list.out"
+              },
+              {
+                "name": "node_list_1.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/node_list_1.err"
+              },
+              {
+                "name": "node_list_1.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/node_list_1.out"
+              },
+              {
+                "name": "node_list_2.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/node_list_2.err"
+              },
+              {
+                "name": "node_list_2.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/node_list_2.out"
+              },
+              {
+                "name": "node_modules",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/node_modules"
+              },
+              {
+                "name": "notifyhist.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/notifyhist.err"
+              },
+              {
+                "name": "notifyhist.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/notifyhist.out"
+              },
+              {
+                "name": "oc.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/oc.err"
+              },
+              {
+                "name": "oc.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/oc.out"
+              },
+              {
+                "name": "openclaw",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/openclaw"
+              },
+              {
+                "name": "openclaw-1000",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/openclaw-1000"
+              },
+              {
+                "name": "orchestrator-audit-task.json",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/orchestrator-audit-task.json"
+              },
+              {
+                "name": "package-lock.json",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/package-lock.json"
+              },
+              {
+                "name": "package.json",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/package.json"
+              },
+              {
+                "name": "pair_list.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/pair_list.err"
+              },
+              {
+                "name": "pair_list.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/pair_list.out"
+              },
+              {
+                "name": "parity-website",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/parity-website"
+              },
+              {
+                "name": "parity-website-worktree",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/parity-website-worktree"
+              },
+              {
+                "name": "rtx-watch-payload.txt",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/rtx-watch-payload.txt"
+              },
+              {
+                "name": "self-improve",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/self-improve"
+              },
+              {
+                "name": "session-index.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/session-index.log"
+              },
+              {
+                "name": "sessions_list_1.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_1.err"
+              },
+              {
+                "name": "sessions_list_1.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_1.out"
+              },
+              {
+                "name": "sessions_list_2.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_2.err"
+              },
+              {
+                "name": "sessions_list_2.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_2.out"
+              },
+              {
+                "name": "sessions_list_20.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_20.err"
+              },
+              {
+                "name": "sessions_list_20.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_20.out"
+              },
+              {
+                "name": "sessions_list_all.err",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_all.err"
+              },
+              {
+                "name": "sessions_list_all.out",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sessions_list_all.out"
+              },
+              {
+                "name": "sprint-supervisor.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sprint-supervisor.log"
+              },
+              {
+                "name": "sprint-worker.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sprint-worker.log"
+              },
+              {
+                "name": "sup-final.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sup-final.log"
+              },
+              {
+                "name": "sup-new.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sup-new.log"
+              },
+              {
+                "name": "sw-clean.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sw-clean.log"
+              },
+              {
+                "name": "sw-debug.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sw-debug.log"
+              },
+              {
+                "name": "sw-final.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sw-final.log"
+              },
+              {
+                "name": "sw-final2.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sw-final2.log"
+              },
+              {
+                "name": "sw-fixed.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sw-fixed.log"
+              },
+              {
+                "name": "sw-new.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/sw-new.log"
+              },
+              {
+                "name": "tmp.MbOPNL513g",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/tmp.MbOPNL513g"
+              },
+              {
+                "name": "tsx-1000",
+                "isDirectory": true,
+                "isFile": false,
+                "path": "/tmp/tsx-1000"
+              },
+              {
+                "name": "worker-c3.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-c3.log"
+              },
+              {
+                "name": "worker-cycle2r.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-cycle2r.log"
+              },
+              {
+                "name": "worker-debug.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-debug.log"
+              },
+              {
+                "name": "worker-final.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-final.log"
+              },
+              {
+                "name": "worker-final2.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-final2.log"
+              },
+              {
+                "name": "worker-new.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-new.log"
+              },
+              {
+                "name": "worker-v2.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-v2.log"
+              },
+              {
+                "name": "worker-v3.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-v3.log"
+              },
+              {
+                "name": "worker-v4.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-v4.log"
+              },
+              {
+                "name": "worker-v5.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-v5.log"
+              },
+              {
+                "name": "worker-v6.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-v6.log"
+              },
+              {
+                "name": "worker-v7.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker-v7.log"
+              },
+              {
+                "name": "worker.log",
+                "isDirectory": false,
+                "isFile": true,
+                "path": "/tmp/worker.log"
+              }
+            ],
+            "count": 86
+          },
+          "artifacts": [],
+          "error": null,
+          "durationMs": 0,
+          "timestamp": "2026-04-06T02:00:40.697Z",
+          "processedAt": "2026-04-06T02:00:40.698Z",
+          "formatter": "markdown"
+        },
+        "formatted": null,
+        "found_in": "audit_key"
+      },
+      "pass": true
+    }
+  ],
+  "nextAction": "Continue Phase 3 cycle 7 rotation with intervention gates active."
+}
