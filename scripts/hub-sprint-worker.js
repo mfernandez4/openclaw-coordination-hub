@@ -33,11 +33,13 @@ try {
     create: ledgerModule.create,
     start: ledgerModule.start,
     complete: ledgerModule.complete,
-    invalidate: ledgerModule.invalidate
+    invalidate: ledgerModule.invalidate,
+    block: ledgerModule.block,
   };
   ({ validateCompletion } = require(`${HUB_PATH}/src/validation`));
+  ({ runPreflight } = require(`${HUB_PATH}/src/preflight-gate`));
 } catch (e) {
-  console.warn(`[sprint] Could not load ledger/validation modules: ${e.message}`);
+  console.warn(`[sprint] Could not load ledger/validation/preflight modules: ${e.message}`);
 }
 let BaseWorker;
 try {
@@ -158,6 +160,38 @@ try {
               console.warn(`[${this.agentId}] Ledger start failed for ${laneId}: ${err.message}`);
             });
           }
+
+          // Preflight gate: block lane early if repo/files are not accessible
+          if (runPreflight) {
+            const preflight = await runPreflight(taskPayload);
+            if (!preflight.passed) {
+              console.warn(`[${this.agentId}] Preflight failed for ${laneId}: ${preflight.reason}`);
+              if (ledgerApi && this.redis && laneId) {
+                await ledgerApi.block(this.redis, laneId, {
+                  reason: preflight.reason,
+                  mitigation: preflight.mitigation || ''
+                }).catch(() => {});
+                // Publish preflight-failure escalation event
+                const event = {
+                  type: 'escalation',
+                  laneId,
+                  taskId: laneId,
+                  agent: this.agentId,
+                  reason: `preflight_failed: ${preflight.reason}`,
+                  stateBefore: 'running',
+                  stateAfter: 'blocked',
+                  timestamp: new Date().toISOString()
+                };
+                await this.redis.publish('a2a:escalations', JSON.stringify(event)).catch(() => {});
+              }
+              const errorResult = this.formatResult(taskPayload, null, 'failed', `preflight_failed: ${preflight.reason}`);
+              await this.publishResult(errorResult);
+              this.currentTask = null;
+              this.startTime = null;
+              continue;
+            }
+          }
+
           const result = await this.processTask(taskPayload);
           const formatted = this.formatResult(taskPayload, result, 'completed');
           await this.publishResult(formatted);
