@@ -79,14 +79,29 @@ async function create(redis, laneId, taskId) {
  * @param {string} laneId
  * @returns {Promise<object>} updated lane record
  */
+/**
+ * Default lane TTL: 5 minutes from start.
+ * Override via LANE_TTL_SECONDS env var.
+ */
+function getLaneTTL() {
+  return (parseInt(process.env.LANE_TTL_SECONDS, 10) || 300) * 1000; // ms
+}
+
 async function start(redis, laneId) {
   const key = `ledger:${laneId}`;
   const raw = await redis.hget(key, 'state');
   if (raw == null) throw new Error(`Lane '${laneId}' does not exist`);
   requireTransition(raw, ['pending']);
 
-  await redis.hset(key, 'state', 'running', 'updatedAt', new Date().toISOString());
-  logger.info('ledger', `Lane running: ${laneId}`, { laneId });
+  const now = new Date();
+  const deadline = new Date(now.getTime() + getLaneTTL()).toISOString();
+
+  await redis.hset(key,
+    'state', 'running',
+    'updatedAt', now.toISOString(),
+    'deadline', deadline
+  );
+  logger.info('ledger', `Lane running: ${laneId} (deadline: ${deadline})`, { laneId, deadline });
 
   return get(redis, laneId);
 }

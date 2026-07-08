@@ -15,6 +15,13 @@
  */
 
 const Redis = require('ioredis');
+const HUB_PATH = process.env.HUB_PATH || '/app';
+let checkAndEscalate;
+try {
+  ({ checkAndEscalate } = require(`${HUB_PATH}/src/escalation-publisher`));
+} catch (e) {
+  console.warn(`[supervisor] Could not load escalation-publisher: ${e.message}`);
+}
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const SCAN_INTERVAL = parseInt(process.argv.find(a => a.startsWith('--scan-interval='))?.split('=')[1] || '15000');
@@ -70,6 +77,18 @@ async function scanAndRecover() {
       await recoverAgent(agent);
     } catch (err) {
       console.error(`[supervisor] [${agent}] Scan error: ${err.message}`);
+    }
+  }
+
+  // TTL watchdog: check ledger for stalled lanes and escalate
+  if (checkAndEscalate) {
+    try {
+      const escalated = await checkAndEscalate(redis, SCAN_INTERVAL);
+      if (escalated.length > 0) {
+        console.log(`[supervisor] Escalated ${escalated.length} stalled lane(s): ${escalated.join(', ')}`);
+      }
+    } catch (err) {
+      console.error(`[supervisor] Watchdog error: ${err.message}`);
     }
   }
 }

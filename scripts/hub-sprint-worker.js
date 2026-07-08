@@ -344,6 +344,22 @@ class SprintWorker extends BaseWorker {
         : `non-success status: ${result.status}`);
       const { shouldEscalate } = await ledgerApi.invalidate(this.redis, laneId, { reason }).catch(() => ({ shouldEscalate: false }));
       console.warn(`[${this.agentId}] Lane invalid for ${laneId}: ${reason}${shouldEscalate ? ' [ESCALATE — 2nd failure]' : ' [retry-1]'}`);
+
+      // Publish escalation event on 2nd failure (two-strike escalation)
+      if (shouldEscalate) {
+        const event = {
+          type: 'escalation',
+          laneId,
+          taskId: laneId,
+          agent: this.agentId,
+          reason,
+          stateBefore: 'running',
+          stateAfter: 'invalid',
+          timestamp: new Date().toISOString()
+        };
+        await this.redis.publish('a2a:escalations', JSON.stringify(event)).catch(() => {});
+        console.warn(`[${this.agentId}] Escalation published for lane ${laneId}: ${reason}`);
+      }
     }
   }
 
