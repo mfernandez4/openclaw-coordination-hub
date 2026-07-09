@@ -256,6 +256,26 @@ describe('BaseWorker', () => {
       );
     });
 
+    test('re-queues task if expire fails after brpoplpush claim (no orphan TTL=-1)', async () => {
+      const task = { task: 'list-files', taskId: 'task:orphan-test' };
+      mockRedis.brpoplpush = vi.fn().mockResolvedValue(JSON.stringify(task));
+      mockRedis.expire = vi.fn().mockRejectedValue(new Error('Redis EXPIRE failed'));
+      mockRedis.lpush = vi.fn().mockResolvedValue(1);
+      const result = await worker.pollTask();
+      // Task should be re-queued, not orphaned with TTL=-1
+      expect(result).toBeNull();
+      expect(mockRedis.lpush).toHaveBeenCalledWith('a2a:inbox:test-agent', JSON.stringify(task));
+    });
+
+    test('re-queues task if JSON.parse fails after brpoplpush claim', async () => {
+      mockRedis.brpoplpush = vi.fn().mockResolvedValue('not valid json{{{');
+      mockRedis.expire = vi.fn().mockResolvedValue(1); // expire succeeds but parse fails
+      mockRedis.lpush = vi.fn().mockResolvedValue(1);
+      const result = await worker.pollTask();
+      expect(result).toBeNull();
+      expect(mockRedis.lpush).toHaveBeenCalled();
+    });
+
     test('returns null on brpoplpush error', async () => {
       mockRedis.brpoplpush = vi.fn().mockRejectedValue(new Error('connection lost'));
       const result = await worker.pollTask();

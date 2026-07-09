@@ -54,10 +54,12 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+          --requirepass test-redis-ci-password
 
     env:
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
+      REDIS_PASSWORD: test-redis-ci-password
 
     steps:
       - name: Checkout

@@ -12,6 +12,9 @@
 
 const Redis = require('ioredis');
 
+const HUB_PATH = process.env.HUB_PATH || '/app';
+const { create: ledgerCreate } = require(`${HUB_PATH}/src/execution-ledger`);
+
 const COORDINATION_BASE = 'coordination:tasks';
 const VALID_PRIORITIES = ['high', 'normal', 'low'];
 
@@ -51,6 +54,14 @@ async function enqueueTask(task, agent = 'default', priority = 'normal', taskTyp
     }
     await redis.lpush(queueKey, JSON.stringify(taskObj));
     console.log(`Enqueued to ${queueKey}: ${taskObj.id}`);
+  }
+
+  // Create ledger entry for this lane (pending state) immediately after enqueue.
+  // Worker transitions it to running → done|blocked|invalid.
+  try {
+    await ledgerCreate(redis, taskObj.id, taskObj.id);
+  } catch (err) {
+    console.warn(`Ledger create failed for ${taskObj.id}: ${err.message}`);
   }
 
   await redis.quit();

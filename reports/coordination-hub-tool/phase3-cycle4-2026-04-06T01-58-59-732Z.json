@@ -1,0 +1,102 @@
+{
+  "generatedAt": "2026-04-06T01:58:59.732Z",
+  "phase": 3,
+  "cycle": 4,
+  "startedAt": "2026-04-06T01:58:39.118Z",
+  "endedAt": "2026-04-06T01:58:59.732Z",
+  "summary": {
+    "status": "blocked",
+    "passed": 0,
+    "failed": 2
+  },
+  "observe": {
+    "before": {
+      "queueDepth": {
+        "high": 0,
+        "normal": 0,
+        "low": 0
+      },
+      "inboxLens": {
+        "a2a:inbox:coding": 0,
+        "a2a:inbox:github-ops": 0,
+        "a2a:inbox:research": 0,
+        "a2a:inbox:dev-ops": 0
+      },
+      "registry": {},
+      "pluginTaskHashes": {
+        "total": 30,
+        "queued": 0,
+        "stuck": 0,
+        "terminal": 30
+      }
+    },
+    "after": {
+      "queueDepth": {
+        "high": 0,
+        "normal": 0,
+        "low": 0
+      },
+      "inboxLens": {
+        "a2a:inbox:coding": 1,
+        "a2a:inbox:github-ops": 1,
+        "a2a:inbox:research": 0,
+        "a2a:inbox:dev-ops": 0
+      },
+      "registry": {},
+      "pluginTaskHashes": {
+        "total": 32,
+        "queued": 2,
+        "stuck": 0,
+        "terminal": 30
+      }
+    }
+  },
+  "decide": {
+    "strategy": "rotated probes: dispatcher github-ops + direct coding, both non-destructive"
+  },
+  "dispatchVerify": [
+    {
+      "name": "dispatcher_github_ops_health_probe",
+      "dispatched": {
+        "ok": true,
+        "task_id": "task:1775440719144:rl4gt9np",
+        "status": "queued",
+        "accepted_at": "2026-04-06T01:58:39.144Z",
+        "queue_key": "coordination:tasks:normal",
+        "result": null,
+        "next_poll_after_ms": 1000
+      },
+      "verified": {
+        "ok": true,
+        "task_id": "task:1775440719144:rl4gt9np",
+        "status": "timeout_waiting",
+        "raw": null,
+        "formatted": null,
+        "found_in": null
+      },
+      "pass": false
+    },
+    {
+      "name": "direct_coding_list_files_probe",
+      "dispatched": {
+        "ok": true,
+        "task_id": "task:1775440729435:59mmu9q5",
+        "status": "queued",
+        "accepted_at": "2026-04-06T01:58:49.435Z",
+        "queue_key": "a2a:inbox:coding",
+        "result": null,
+        "next_poll_after_ms": 1000
+      },
+      "verified": {
+        "ok": true,
+        "task_id": "task:1775440729435:59mmu9q5",
+        "status": "timeout_waiting",
+        "raw": null,
+        "formatted": null,
+        "found_in": null
+      },
+      "pass": false
+    }
+  ],
+  "nextAction": "Classify failure signatures, apply fix, rerun cycle 4 recovery pass."
+}
