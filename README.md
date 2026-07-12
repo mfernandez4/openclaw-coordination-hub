@@ -141,5 +141,12 @@ Set environment variables:
 
 ## Status
 
-Initial scaffold. Implementation in progress.
+**v0.7.0 — Delivery Reliability Enforcement (Issue #55 complete)**
+
+Runtime enforcement of lane execution contracts:
+- ✅ Execution ledger (state machine + two-strike invalidation)
+- ✅ Completion schema validation (commitHash, changedFiles, verification)
+- ✅ TTL lease watchdog + escalation publisher
+- ✅ Preflight gate (repo visibility + required files)
+- ✅ 356 tests passing
 ---
